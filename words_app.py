@@ -8,7 +8,7 @@ import datetime
 # 1. 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="Le Menu du Jour",
+    page_title="Le Menu du Jour", 
     page_icon="🥘",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -25,7 +25,6 @@ style_css = """
         background-color: #FDFCF8;
         background-image: radial-gradient(#FDFCF8 20%, #F2EFE9 100%);
     }
-
     .menu-card {
         background-color: #FFF;
         padding: 50px 30px;
@@ -36,7 +35,6 @@ style_css = """
         text-align: center;
         position: relative;
     }
-
     .main-title {
         font-family: 'Playfair Display', serif;
         text-align: center;
@@ -82,7 +80,6 @@ style_css = """
         color: #5D4037;
         line-height: 1.5;
     }
-
     .menu-divider-top {
         border-top: 3px double #8D6E63;
         width: 60px;
@@ -93,7 +90,6 @@ style_css = """
         width: 40%;
         margin: 30px auto 0 auto;
     }
-
     div.stButton > button {
         background-color: transparent;
         color: #5D4037;
@@ -111,8 +107,6 @@ style_css = """
         color: #FFF;
         border-color: #8D6E63;
     }
-
-    /* 手机端适配 */
     @media only screen and (max-width: 600px) {
         .main-title { font-size: 32px; }
         .menu-card { padding: 30px 15px; }
@@ -126,59 +120,74 @@ style_css = """
 """
 st.markdown(style_css, unsafe_allow_html=True)
 
-
 # ==========================================
-# 3. 数据加载与每日逻辑 (核心修改部分)
+# 3. 数据加载 (增加了强力纠错功能)
 # ==========================================
 
 @st.cache_data
 def load_data():
     try:
-        # 读取同目录下的 vocab.csv 文件
-        # keep_default_na=False 防止把法语单词 "Null" 误读为空值
-        df = pd.read_csv("vocab.csv", keep_default_na=False)
-        return df.to_dict('records')
-    except FileNotFoundError:
-        return []
+        # 1. 强制使用 UTF-8 编码读取
+        # 2. 自动去除列名两边的空格 (防止 ' word' 这种错误)
+        df = pd.read_csv("vocab.csv", encoding='utf-8', keep_default_na=False)
+        
+        # 3. 清理列名（去除看不见的空格）
+        df.columns = df.columns.str.strip()
+        
+        return df
+    except Exception as e:
+        return pd.DataFrame() # 返回空表防止报错
 
+# 加载数据
+df_all = load_data()
+all_words = df_all.to_dict('records')
 
-# 加载全部单词
-all_words = load_data()
+# ==========================================
+# 🔍 调试侧边栏 (Debug Sidebar)
+# 这一块能让你看到电脑到底读到了什么
+# ==========================================
+with st.sidebar:
+    st.header("🕵️‍♂️ 厨房后台 (Debug)")
+    if df_all.empty:
+        st.error("⚠️ 没读到数据！请检查 vocab.csv 文件是否存在，且不是空的。")
+    else:
+        st.write("当前词汇表预览：")
+        st.dataframe(df_all.head(5)) # 只显示前5行
+        st.info(f"总共加载了 {len(all_words)} 个单词。")
+        
+        # 检查列名是否正确
+        required_columns = ["word", "meaning", "gender", "example"]
+        missing = [col for col in required_columns if col not in df_all.columns]
+        if missing:
+            st.error(f"❌ 缺少列名: {missing}")
+            st.warning("请确保CSV第一行完全匹配: word,meaning,gender,example")
+        else:
+            st.success("✅ 列名格式正确！")
 
-# === 每日复习逻辑 ===
+# ==========================================
+# 每日复习逻辑
+# ==========================================
 if not all_words:
-    st.error("找不到单词表 (vocab.csv)。请先上传文件！")
+    st.error("暂无数据，请检查侧边栏的错误提示。")
     st.stop()
 
-# 获取今天的日期字符串 (例如 "2023-10-27")
 today_str = datetime.date.today().isoformat()
-
-# 使用今天的日期作为随机数种子
-# 这样保证在同一天内，随机挑选出的50个单词是固定的
 random.seed(today_str)
 
-# 确定今日复习列表
 if len(all_words) <= 50:
-    todays_list = all_words  # 不足50个，就复习全部
+    todays_list = all_words
 else:
-    # 从总库中随机抽取50个，但这50个在今天是不变的
     todays_list = random.sample(all_words, 50)
 
-# 重置随机种子，以免影响后面按钮点击时的随机切换
-# (我们需要列表是固定的，但切换单词时需要真随机)
-random.seed()
+random.seed() 
 
-# 初始化 Session State
 if 'current_dish' not in st.session_state:
     st.session_state.current_dish = random.choice(todays_list)
     st.session_state.show_ingredients = False
 
-
 def next_dish():
-    # 从今日列表中随机选一个
     st.session_state.current_dish = random.choice(todays_list)
     st.session_state.show_ingredients = False
-
 
 dish = st.session_state.current_dish
 
@@ -186,17 +195,16 @@ dish = st.session_state.current_dish
 # 4. 界面渲染
 # ==========================================
 st.markdown("<div class='main-title'>Menu du Vocabulaire</div>", unsafe_allow_html=True)
-# 显示今日复习数量
-st.markdown(f"<div class='sub-title'>~ 今日特供: {len(todays_list)} 道菜 (Total: {len(all_words)}) ~</div>",
-            unsafe_allow_html=True)
+st.markdown(f"<div class='sub-title'>~ 今日特供: {len(todays_list)} 道菜 (Total: {len(all_words)}) ~</div>", unsafe_allow_html=True)
 
 if not st.session_state.show_ingredients:
     # === 正面 ===
+    # 这里我们再次确认引用的是 'word' 字段
     st.markdown(f"""
 <div class="menu-card">
 <div class="menu-divider-top"></div>
 <div style="color: #999; font-family: 'Patrick Hand'; margin-bottom: 10px; font-size:16px;">Plat du Jour (今日特色)</div>
-<div class="dish-name">{dish['word']}</div>
+<div class="dish-name">{dish.get('word', 'Error')}</div>
 <div style="margin-top: 40px; color: #BCAAA4; font-family: 'Patrick Hand';">
 (Toucher pour voir la recette...)
 </div>
@@ -215,14 +223,14 @@ else:
     st.markdown(f"""
 <div class="menu-card">
 <div class="menu-divider-top"></div>
-<div class="dish-name">{dish['word']}</div>
-<div class="dish-meta">{dish['gender']}</div>
+<div class="dish-name">{dish.get('word', 'Error')}</div>
+<div class="dish-meta">{dish.get('gender', '')}</div>
 <div class="chef-note">
-“ {dish['meaning']} ”
+“ {dish.get('meaning', '')} ”
 </div>
 <div class="recipe-box">
 <span style="color:#8D6E63; font-weight:bold;">Exemple:</span><br>
-{dish['example']}
+{dish.get('example', '')}
 </div>
 <div class="menu-divider-bottom"></div>
 </div>
@@ -239,7 +247,6 @@ else:
             next_dish()
             st.rerun()
 
-# 页脚
 st.markdown(
     "<br><div style='text-align: center; font-family: Patrick Hand; color: #D7CCC8; font-size: 14px;'>Fait avec amour par Python</div>",
     unsafe_allow_html=True)
