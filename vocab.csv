@@ -1,13 +1,13 @@
 word,meaning,gender,example
-Bonjour,你好,m. (阳性/问候),Bonjour, comment allez-vous ?
+Bonjour,你好,m. (阳性/问候),"Bonjour, comment allez-vous ?"
 Merci,谢谢,Exp. (短语),Merci beaucoup pour le cadeau.
 L'Amour,爱 / 爱情,m. (阳性),L'amour est plus fort que tout.
 Le Chat,猫,m. (阳性),Le chat dort sur le canapé.
 Le Chien,狗,m. (阳性),Mon chien aime courir dans le parc.
 La Maison,家 / 房子,f. (阴性),Bienvenue dans ma maison.
 Le Pain,面包,m. (阳性),Je mange du pain tous les matins.
-L'Eau,水,f. (阴性),Je voudrais un verre d'eau, s'il vous plaît.
-Le Café,咖啡,m. (阳性),Un café noir sans sucre, merci.
+L'Eau,水,f. (阴性),"Je voudrais un verre d'eau, s'il vous plaît."
+Le Café,咖啡,m. (阳性),"Un café noir sans sucre, merci."
 Le Vin,葡萄酒,m. (阳性),Les Français aiment le bon vin.
 La Pomme,苹果,f. (阴性),Une pomme par jour éloigne le médecin.
 Le Fromage,奶酪,m. (阳性),Ce fromage est délicieux.
@@ -47,5 +47,5 @@ Grand,大的 / 高的,adj. (形容词),C'est un grand bâtiment.
 Petit,小的,adj. (形容词),Le Petit Prince est une belle histoire.
 Rouge,红色,adj. (形容词),J'aime cette robe rouge.
 Bleu,蓝色,adj. (形容词),Le ciel est bleu.
-Vite,快,adv. (副词),Allez, plus vite !
-Doucement,慢慢地 / 温柔地,adv. (副词),Parle doucement, s'il te plaît.
+Vite,快,adv. (副词),"Allez, plus vite !"
+Doucement,慢慢地 / 温柔地,adv. (副词),"Parle doucement, s'il te plaît."
