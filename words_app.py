@@ -34,29 +34,26 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. AI 核心功能 (HTTP 请求版 - 专治版本不兼容) ---
+# --- B. AI 核心功能 (HTTP 请求版 - 语法安全修正) ---
 def ask_gemini_for_word_info(api_key, word):
-    """
-    直接通过 HTTP 请求访问 Google Gemini API，
-    避开 Streamlit Cloud 上的旧版本库依赖问题。
-    """
     if not api_key:
         return None, "请先在侧边栏输入 API Key"
     
-    # API 地址 (使用 gemini-1.5-flash)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    # 使用 gemini-pro (稳定)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
     
-    # 提示词
-    prompt_text = f"""
-    你是一个法语老师。请分析单词 "{word}"。
-    请直接返回一个纯 JSON 字符串，不要使用 Markdown 格式。
-    JSON 格式必须严格如下:
-    {{
-        "meaning": "中文含义(简练)",
-        "gender": "词性(如 m. / f. / v.)",
-        "example": "简短的法语例句"
-    }}
-    """
+    # 🌟 修改重点：使用 + 号拼接字符串，避免 f-string 的大括号冲突
+    # 这样下面的 JSON 示例就可以直接写 { }，不用写 {{ }}，更清晰，不出错
+    prompt_text = (
+        '你是一个法语老师。请分析单词 "' + word + '"。\n'
+        '请务必返回纯 JSON 格式，不要包含 Markdown 标记 (如 ```json)。\n'
+        'JSON 格式必须严格如下:\n'
+        '{\n'
+        '    "meaning": "中文含义(简练)",\n'
+        '    "gender": "词性(如 m. / f. / v.)",\n'
+        '    "example": "简短的法语例句"\n'
+        '}'
+    )
     
     # 请求体
     payload = {
@@ -72,33 +69,26 @@ def ask_gemini_for_word_info(api_key, word):
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
         
         if response.status_code != 200:
-            return None, f"请求失败 (代码 {response.status_code}): {response.text}"
+            return None, f"请求失败 (Code {response.status_code}): {response.text}"
             
         # 解析返回结果
         result = response.json()
         
-        # 提取文本内容
-        # Google API 的返回结构比较深: candidates -> content -> parts -> text
         try:
             raw_text = result['candidates'][0]['content']['parts'][0]['text']
         except (KeyError, IndexError):
-            return None, "AI 返回的数据格式无法解析"
+            return None, "AI 返回的数据结构异常，请重试"
 
-        # 清理 Markdown (防止 AI 还是加了 ```json)
+        # 清理 Markdown
         clean_text = raw_text.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        if clean_text.startswith("```"):
-            clean_text = clean_text[3:]
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
+        clean_text = clean_text.replace("```json", "").replace("```", "").strip()
             
         # 转为字典
         return json.loads(clean_text), None
 
     except Exception as e:
         return None, f"连接错误: {str(e)}"
-
+        
 # --- C. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
@@ -326,3 +316,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.rerun()
 
 st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI (REST API)</div>", unsafe_allow_html=True)
+
