@@ -34,11 +34,11 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. AI 核心功能 (Gemini) ---
+# --- B. AI 核心功能 (兼容版) ---
 def ask_gemini_for_word_info(api_key, word):
     """
     调用 Gemini API 获取单词的详情
-    返回一个字典: {'meaning': '...', 'gender': '...', 'example': '...'}
+    使用 gemini-pro 模型，兼容性更好
     """
     if not api_key:
         return None, "请先在侧边栏输入 API Key"
@@ -46,30 +46,37 @@ def ask_gemini_for_word_info(api_key, word):
     try:
         # 配置 API
         genai.configure(api_key=api_key)
-        # 使用轻量级模型 flash，速度快且免费额度高
-        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # 精心设计的 Prompt (提示词)
-        # 要求 AI 必须返回标准的 JSON 格式，方便程序读取
+        # 使用旧版稳定模型 gemini-pro
+        # 注意：这里我们不使用 response_mime_type 参数，防止旧库报错
+        model = genai.GenerativeModel('gemini-pro')
+        
         prompt = f"""
-        你是一个专业的法语老师。请分析法语单词 "{word}"。
-        请返回一个纯 JSON 格式的回答，不要包含 markdown 格式或其他废话。
-        JSON 必须包含以下三个字段:
-        1. "meaning": 中文含义 (简练，最常用的意思)
-        2. "gender": 词性 (例如: "m. (阳性)", "f. (阴性)", "v. (动词)", "adj." 等)
-        3. "example": 一个适合初学者学习的简单法语句子 (包含该单词)
+        你是一个法语老师。请分析单词 "{word}"。
+        请直接返回一个纯 JSON 字符串。
+        严禁使用 Markdown 格式 (不要写 ```json ... ```)。
         
-        如果单词拼写错误或不存在，请返回 null。
+        JSON 格式如下:
+        {{
+            "meaning": "中文含义(简练)",
+            "gender": "词性(如 m. / f. / v.)",
+            "example": "简短的法语例句"
+        }}
         """
         
-        # 请求 AI，强制要求 JSON 模式 (Gemini 的新特性)
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
-        )
+        response = model.generate_content(prompt)
         
-        # 解析结果
-        result_dict = json.loads(response.text)
+        # 手动清理数据 (防止 AI 有时候还是会加 markdown 符号)
+        clean_text = response.text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.startswith("```"):
+            clean_text = clean_text[3:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        
+        # 解析 JSON
+        result_dict = json.loads(clean_text)
         return result_dict, None
 
     except Exception as e:
@@ -312,3 +319,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.rerun()
 
 st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI</div>", unsafe_allow_html=True)
+
