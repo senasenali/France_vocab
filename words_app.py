@@ -4,16 +4,15 @@ import datetime
 from datetime import date, timedelta
 import random
 import io
-import requests
-from bs4 import BeautifulSoup
+import json
+import google.generativeai as genai
 from gtts import gTTS
-from deep_translator import GoogleTranslator
 
 # ==========================================
 # 1. 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="Le Menu du Jour - Pro", 
+    page_title="Le Menu du Jour - AI版", 
     page_icon="🥐",
     layout="centered",
     initial_sidebar_state="expanded"
@@ -35,43 +34,48 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. 翻译功能 ---
-@st.cache_data(show_spinner=False)
-def translate_text(text):
+# --- B. AI 核心功能 (Gemini) ---
+def ask_gemini_for_word_info(api_key, word):
+    """
+    调用 Gemini API 获取单词的详情
+    返回一个字典: {'meaning': '...', 'gender': '...', 'example': '...'}
+    """
+    if not api_key:
+        return None, "请先在侧边栏输入 API Key"
+    
     try:
-        cn_meaning = GoogleTranslator(source='fr', target='zh-CN').translate(text)
-        en_meaning = GoogleTranslator(source='fr', target='en').translate(text)
-        return cn_meaning, en_meaning
-    except Exception:
-        return "", ""
+        # 配置 API
+        genai.configure(api_key=api_key)
+        # 使用轻量级模型 flash，速度快且免费额度高
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # 精心设计的 Prompt (提示词)
+        # 要求 AI 必须返回标准的 JSON 格式，方便程序读取
+        prompt = f"""
+        你是一个专业的法语老师。请分析法语单词 "{word}"。
+        请返回一个纯 JSON 格式的回答，不要包含 markdown 格式或其他废话。
+        JSON 必须包含以下三个字段:
+        1. "meaning": 中文含义 (简练，最常用的意思)
+        2. "gender": 词性 (例如: "m. (阳性)", "f. (阴性)", "v. (动词)", "adj." 等)
+        3. "example": 一个适合初学者学习的简单法语句子 (包含该单词)
+        
+        如果单词拼写错误或不存在，请返回 null。
+        """
+        
+        # 请求 AI，强制要求 JSON 模式 (Gemini 的新特性)
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        
+        # 解析结果
+        result_dict = json.loads(response.text)
+        return result_dict, None
 
-# --- C. 爬虫功能 (Larousse) ---
-@st.cache_data(show_spinner="正在查阅 Larousse 词典...")
-def get_larousse_details(word):
-    url = f"https://www.larousse.fr/dictionnaires/francais/{word.strip().lower()}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-    pos = ""      
-    example = ""  
-    try:
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            cat_tag = soup.find('p', class_='Catgramme')
-            if cat_tag:
-                raw_cat = cat_tag.get_text().strip().lower()
-                if "masculin" in raw_cat: pos = "m. (阳性)"
-                elif "féminin" in raw_cat: pos = "f. (阴性)"
-                elif "verbe" in raw_cat: pos = "v. (动词)"
-                elif "adjectif" in raw_cat: pos = "adj. (形容词)"
-                else: pos = raw_cat 
-            ex_tag = soup.find('span', class_='Exemple')
-            if ex_tag:
-                example = ex_tag.get_text().strip()
-        return pos, example
-    except Exception:
-        return "", ""
+    except Exception as e:
+        return None, f"AI 调用失败: {str(e)}"
 
-# --- D. 记忆曲线算法 ---
+# --- C. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
     current_interval = int(word_row.get('interval', 0))
@@ -86,7 +90,7 @@ def update_word_progress(word_row, quality):
     return word_row
 
 # ==========================================
-# 3. 数据加载 (修复了日期格式报错的问题)
+# 3. 数据加载
 # ==========================================
 REQUIRED_COLS = ['word', 'meaning', 'gender', 'example']
 SRS_COLS = ['last_review', 'next_review', 'interval']
@@ -95,42 +99,42 @@ def load_data():
     try:
         df = pd.read_csv("vocab.csv", encoding='utf-8', keep_default_na=False, quotechar='"')
         df.columns = df.columns.str.strip()
-        
-        # 补全缺失列
         for col in SRS_COLS:
             if col not in df.columns:
                 df[col] = None if col == 'last_review' else 0
         
-        # === 修复日期列的类型问题 (关键修复) ===
-        # 1. 强制转为 datetime 对象，处理各种乱七八糟的格式
         if 'next_review' in df.columns:
             df['next_review'] = pd.to_datetime(df['next_review'], errors='coerce')
-            # 2. 再统一转回 YYYY-MM-DD 字符串格式，方便比较
             df['next_review'] = df['next_review'].dt.strftime('%Y-%m-%d')
-            # 3. 如果是空值（NaT），填入今天，确保新词能被显示
             df['next_review'] = df['next_review'].fillna(date.today().isoformat())
-
         return df
-    except Exception as e:
-        # 如果文件还没创建，返回空表
+    except Exception:
         return pd.DataFrame(columns=REQUIRED_COLS + SRS_COLS)
 
-# 初始化 Session State
 if 'df_all' not in st.session_state:
     st.session_state.df_all = load_data()
 
 df = st.session_state.df_all
 
 # ==========================================
-# 4. 侧边栏
+# 4. 侧边栏 (增加 API Key 输入框)
 # ==========================================
 with st.sidebar:
     st.title("🇫🇷 Menu Français")
-    app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
+    
+    # --- API Key 配置 ---
+    with st.expander("🔑 AI 设置 (必填)", expanded=not bool(st.session_state.get('gemini_key'))):
+        user_api_key = st.text_input("输入 Google Gemini API Key:", type="password", help="去 aistudio.google.com 免费申请")
+        if user_api_key:
+            st.session_state['gemini_key'] = user_api_key
+            st.success("已就绪!")
+    
+    st.divider()
+    
+    app_mode = st.radio("选择模式", ["🔍 AI 查单词 (Dictionary)", "📖 背单词 (Review)"])
+    
     st.divider()
     st.caption("💾 数据同步")
-    
-    # 导出时确保格式整洁
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
         label="📥 下载最新 vocab.csv",
@@ -141,17 +145,21 @@ with st.sidebar:
     )
 
 # ==========================================
-# 5. 查单词模式
+# 5. 查单词模式 (AI版)
 # ==========================================
-if app_mode == "🔍 查单词 (Dictionary)":
-    st.header("🔍 Dictionnaire Intelligent")
+if app_mode == "🔍 AI 查单词 (Dictionary)":
+    st.header("🤖 AI 智能词典")
+    st.caption("由 Google Gemini 提供支持")
+    
     col_search, col_btn = st.columns([4, 1])
     with col_search:
         search_query = st.text_input("输入法语单词:", placeholder="例如: chat").strip()
     
+    # 预初始化变量
     auto_cn, auto_pos, auto_ex = "", "", ""
 
     if search_query:
+        # 1. 查重
         match = df[df['word'].str.lower() == search_query.lower()]
         if not match.empty:
             st.success("✅ 单词已存在！")
@@ -159,56 +167,65 @@ if app_mode == "🔍 查单词 (Dictionary)":
             st.info(f"**{exist_word['word']}** ({exist_word['gender']}) : {exist_word['meaning']}")
             st.caption(f"例句: {exist_word['example']}")
         else:
-            with st.spinner("正在分析单词..."):
-                auto_cn, _ = translate_text(search_query)
-                auto_pos, auto_ex = get_larousse_details(search_query)
-
-            if auto_cn:
-                st.markdown(f"### 🇫🇷 {search_query}")
-                audio = get_audio_bytes(search_query)
-                if audio: st.audio(audio, format='audio/mp3')
-                
-                c1, c2, c3 = st.columns([1, 1, 2])
-                c1.metric("中文意思", auto_cn)
-                c2.metric("词性", auto_pos if auto_pos else "未知")
-                c3.info(f"**例句:** {auto_ex}" if auto_ex else "暂无")
-
-                st.divider()
-                st.write("📝 **加入生词本**")
-                with st.form("add_word_form"):
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        final_word = st.text_input("单词", value=search_query)
-                        final_gender = st.text_input("词性", value=auto_pos)
-                    with col_b:
-                        final_meaning = st.text_input("中文意思", value=auto_cn)
-                        final_example = st.text_input("例句", value=auto_ex)
-                    
-                    if st.form_submit_button("➕ 加入记忆列表"):
-                        new_row = {
-                            'word': final_word,
-                            'meaning': final_meaning,
-                            'gender': final_gender,
-                            'example': final_example,
-                            'last_review': None,
-                            'next_review': date.today().isoformat(),
-                            'interval': 0
-                        }
-                        st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                        st.toast(f"已保存: {final_word}！", icon="🎉")
-                        st.cache_data.clear()
+            # 2. 调用 AI
+            api_key = st.session_state.get('gemini_key')
+            
+            if not api_key:
+                st.warning("⚠️ 请先在侧边栏输入 Google API Key 才能使用 AI 功能。")
             else:
-                st.error("查询失败，请检查拼写。")
+                with st.spinner("🤖 AI 正在思考词性和造句..."):
+                    ai_result, error_msg = ask_gemini_for_word_info(api_key, search_query)
+                
+                if error_msg:
+                    st.error(error_msg)
+                elif ai_result:
+                    # 获取 AI 的结果
+                    auto_cn = ai_result.get('meaning', '')
+                    auto_pos = ai_result.get('gender', '')
+                    auto_ex = ai_result.get('example', '')
+
+                    # 显示结果
+                    st.markdown(f"### 🇫🇷 {search_query}")
+                    audio = get_audio_bytes(search_query)
+                    if audio: st.audio(audio, format='audio/mp3')
+                    
+                    c1, c2, c3 = st.columns([1, 1, 2])
+                    c1.metric("中文意思", auto_cn)
+                    c2.metric("词性", auto_pos)
+                    c3.info(f"**AI造句:** {auto_ex}")
+
+                    st.divider()
+                    st.write("📝 **加入生词本**")
+                    with st.form("add_word_form"):
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            final_word = st.text_input("单词", value=search_query)
+                            final_gender = st.text_input("词性", value=auto_pos)
+                        with col_b:
+                            final_meaning = st.text_input("中文意思", value=auto_cn)
+                            final_example = st.text_input("例句", value=auto_ex)
+                        
+                        if st.form_submit_button("➕ 加入记忆列表"):
+                            new_row = {
+                                'word': final_word,
+                                'meaning': final_meaning,
+                                'gender': final_gender,
+                                'example': final_example,
+                                'last_review': None,
+                                'next_review': date.today().isoformat(),
+                                'interval': 0
+                            }
+                            st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
+                            st.toast(f"已保存: {final_word}！", icon="🎉")
+                            st.cache_data.clear()
 
 # ==========================================
-# 6. 背单词模式 (比较逻辑已安全修复)
+# 6. 背单词模式 (不变)
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
     
     if 'study_queue' not in st.session_state:
         today_str = date.today().isoformat()
-        
-        # 这里的比较现在安全了，因为 next_review 已经被强制转成了字符串
         mask = (st.session_state.df_all['next_review'] <= today_str) | (st.session_state.df_all['next_review'].isna())
         due_df = st.session_state.df_all[mask]
         
@@ -294,4 +311,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.session_state.show_back = False
                     st.rerun()
 
-st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Python</div>", unsafe_allow_html=True)
+st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI</div>", unsafe_allow_html=True)
