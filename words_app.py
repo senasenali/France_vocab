@@ -13,7 +13,7 @@ from deep_translator import GoogleTranslator
 # 1. 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="Le Menu du Jour - Classic", 
+    page_title="Le Menu du Jour - Lite", 
     page_icon="🥐",
     layout="centered",
     initial_sidebar_state="expanded"
@@ -35,22 +35,20 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. 翻译功能 (使用 deep-translator) ---
+# --- B. 翻译功能 ---
 @st.cache_data(show_spinner=False)
 def translate_text(text):
     try:
-        # 使用 Google 翻译接口
         cn_meaning = GoogleTranslator(source='fr', target='zh-CN').translate(text)
         return cn_meaning
     except Exception:
         return ""
 
-# --- C. 爬虫功能 (增强版：精准抓取阴阳性与过滤例句) ---
-@st.cache_data(show_spinner="正在查阅维基词典...")
-def get_wiktionary_details(word):
+# --- C. 爬虫功能 (只抓词性，不再抓长长的例句) ---
+@st.cache_data(show_spinner="正在查询词性...")
+def get_wiktionary_pos(word):
     """
-    爬取 fr.wiktionary.org
-    修复了 'chat' 抓取不到阴阳性和抓到错误例句的问题
+    只抓取词性 (Part of Speech)
     """
     word = word.strip().lower()
     url = f"https://fr.wiktionary.org/wiki/{word}"
@@ -59,21 +57,15 @@ def get_wiktionary_details(word):
     }
     
     pos = "未知"      
-    example = ""  
     
     try:
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # === 1. 精准抓取性别 (Gender) ===
-            # 策略：直接在“法语”部分的定义行里找 "masculin" 或 "féminin" 关键字
-            # 维基词典通常在 class="ligne-de-forme" 或者定义头里写性别
-            
-            # 先找到法语区 (id="Français")
+            # 1. 精准抓取性别
             fr_section = soup.find(id="Français")
             if fr_section:
-                # 缩小搜索范围，只看法语部分
                 parent = fr_section.find_parent()
                 # 寻找包含性别的行
                 gender_line = parent.find_next('span', class_='ligne-de-forme')
@@ -85,12 +77,11 @@ def get_wiktionary_details(word):
                     elif 'féminin' in text or ' f' in text:
                         pos = "f. (阴性)"
                 
-                # 如果上面没找到，尝试在所有 title="Nom commun" 附近找
+                # 如果没找到，尝试在标题找
                 if pos == "未知":
                     all_pos_headers = soup.find_all('span', class_='titredef')
                     for header in all_pos_headers:
                         if 'nom' in header.get_text().lower():
-                            # 往后找一行
                             next_line = header.find_next('p')
                             if next_line:
                                 txt = next_line.get_text().lower()
@@ -100,58 +91,19 @@ def get_wiktionary_details(word):
                                 elif 'féminin' in txt: 
                                     pos = "f. (阴性)"
                                     break
-                            pos = "n. (名词)" # 找到了名词但没分出性别
-            
-            # === 2. 智能抓取例句 (Example) ===
-            # 策略：过滤掉短标签（如 Félinologie），只保留像句子的文本
-            
-            # 优先找明确标记为例句的 span
-            ex_tags = soup.find_all('span', class_='exemple')
-            for ex in ex_tags:
-                txt = ex.get_text().strip()
-                if len(txt) > 15: # 长度过滤
-                    example = txt
-                    break
-            
-            # 如果没找到，遍历所有列表里的斜体字 (维基词典惯用格式)
-            if not example:
-                li_tags = soup.find_all('li')
-                for li in li_tags:
-                    # 必须包含斜体 (通常例句是斜体)
-                    italic = li.find('i')
-                    if italic:
-                        raw_text = italic.get_text().strip()
-                        
-                        # === 核心过滤逻辑 ===
-                        # 1. 长度必须 > 15 (过滤掉 "Félinologie")
-                        # 2. 不能以 "(" 开头 (过滤掉解释性文字)
-                        # 3. 必须包含空格 (确保是句子)
-                        if len(raw_text) > 15 and not raw_text.startswith('(') and ' ' in raw_text:
-                            # 4. (可选) 最好包含原单词
-                            # if word in raw_text.lower(): 
-                            example = raw_text
+                            pos = "n. (名词)"
+                        elif 'verbe' in header.get_text().lower():
+                            pos = "v. (动词)"
                             break
-
-        # === 3. 兜底造句 (如果还是没抓到) ===
-        if not example:
-            if "m." in pos: example = f"Le {word} est ici."
-            elif "f." in pos: example = f"La {word} est belle."
-            elif "v." in pos: example = f"Je veux {word}."
-            elif "adj" in pos: example = f"C'est très {word}."
-        
-        # 如果词性依然是未知，尝试根据常见后缀猜一下 (Beta)
-        if pos == "未知" or pos == "n. (名词)":
-            if word.endswith('e') and not word.endswith('age') and not word.endswith('isme'):
-                suggestion = "f. (阴性?)"
-            else:
-                suggestion = "m. (阳性?)"
-            if pos == "n. (名词)": pos = f"n. {suggestion}"
-
-        return pos, example
+                        elif 'adjectif' in header.get_text().lower():
+                            pos = "adj. (形容词)"
+                            break
+            
+        return pos
 
     except Exception:
-        return "未知", ""
-        
+        return "未知"
+
 # --- D. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
@@ -167,9 +119,10 @@ def update_word_progress(word_row, quality):
     return word_row
 
 # ==========================================
-# 3. 数据加载 (安全版)
+# 3. 数据加载
 # ==========================================
-REQUIRED_COLS = ['word', 'meaning', 'gender', 'example']
+# 虽然我们不显示example了，但为了兼容CSV文件格式，我们还是保留这个列，只是填空
+REQUIRED_COLS = ['word', 'meaning', 'gender', 'example'] 
 SRS_COLS = ['last_review', 'next_review', 'interval']
 
 def load_data():
@@ -180,7 +133,6 @@ def load_data():
             if col not in df.columns:
                 df[col] = None if col == 'last_review' else 0
         
-        # 强制修复日期格式 (防止 TypeError)
         if 'next_review' in df.columns:
             df['next_review'] = pd.to_datetime(df['next_review'], errors='coerce')
             df['next_review'] = df['next_review'].dt.strftime('%Y-%m-%d')
@@ -202,7 +154,7 @@ with st.sidebar:
     
     app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
     st.divider()
-    st.caption("💾 数据同步")
+    
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
         label="📥 下载最新 vocab.csv",
@@ -213,17 +165,40 @@ with st.sidebar:
     )
 
 # ==========================================
-# 5. 查单词模式 (Wiki + Translation)
+# 5. 查单词模式 (极简版)
 # ==========================================
 if app_mode == "🔍 查单词 (Dictionary)":
-    st.header("🔍 Dictionnaire (Wiki版)")
+    
+    # CSS 优化：让标题更好看
+    st.markdown("""
+    <style>
+        .dict-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 40px;
+            color: #3E2723;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dict-meaning {
+            font-family: 'Patrick Hand', sans-serif;
+            font-size: 24px;
+            color: #5D4037;
+            text-align: center;
+            background-color: #F5F5F5;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.header("🔍 Dictionnaire Lite")
     
     col_search, col_btn = st.columns([4, 1])
     with col_search:
         search_query = st.text_input("输入法语单词:", placeholder="例如: chat").strip()
     
-    # 预初始化
-    auto_cn, auto_pos, auto_ex = "", "", ""
+    auto_cn, auto_pos = "", ""
 
     if search_query:
         # 查重
@@ -231,55 +206,61 @@ if app_mode == "🔍 查单词 (Dictionary)":
         if not match.empty:
             st.success("✅ 单词已存在！")
             exist_word = match.iloc[0]
-            st.info(f"**{exist_word['word']}** ({exist_word['gender']}) : {exist_word['meaning']}")
-            st.caption(f"例句: {exist_word['example']}")
+            # 显示存在的单词卡片
+            st.markdown(f"<div class='dict-title'>{exist_word['word']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; color:#999; margin-top:-20px; margin-bottom:20px;'>{exist_word['gender']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='dict-meaning'>{exist_word['meaning']}</div>", unsafe_allow_html=True)
         else:
             # 联网查询
-            with st.spinner("🔍 正在检索维基词典..."):
-                # 1. 翻译意思
+            with st.spinner("🔍 正在查询..."):
                 auto_cn = translate_text(search_query)
-                # 2. 爬取详情
-                auto_pos, auto_ex = get_wiktionary_details(search_query)
+                auto_pos = get_wiktionary_pos(search_query)
 
             if auto_cn:
-                st.markdown(f"### 🇫🇷 {search_query}")
+                # === 优化后的显示界面 ===
+                # 不再显示 "FR chat"，直接显示优雅的大字
+                st.markdown(f"<div class='dict-title'>{search_query}</div>", unsafe_allow_html=True)
+                
+                # 发音
                 audio = get_audio_bytes(search_query)
                 if audio: st.audio(audio, format='audio/mp3')
-                
-                c1, c2, c3 = st.columns([1, 1, 2])
-                c1.metric("中文意思", auto_cn)
-                c2.metric("词性", auto_pos if auto_pos else "未知")
-                c3.info(f"**例句:** {auto_ex}" if auto_ex else "暂无")
+
+                # 信息卡片
+                st.markdown(f"<div style='text-align:center; color:#78909C; margin-bottom: 10px;'>{auto_pos}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='dict-meaning'>{auto_cn}</div>", unsafe_allow_html=True)
 
                 st.divider()
-                st.write("📝 **加入生词本**")
+                st.caption("📝 确认并保存")
+                
+                # 极简表单：没有例句了
                 with st.form("add_word_form"):
-                    col_a, col_b = st.columns(2)
+                    col_a, col_b = st.columns([1, 2])
                     with col_a:
-                        final_word = st.text_input("单词", value=search_query)
                         final_gender = st.text_input("词性", value=auto_pos)
                     with col_b:
                         final_meaning = st.text_input("中文意思", value=auto_cn)
-                        final_example = st.text_input("例句", value=auto_ex)
                     
-                    if st.form_submit_button("➕ 加入记忆列表"):
+                    # 隐藏的 Word 字段
+                    final_word = search_query 
+                    
+                    if st.form_submit_button("➕ 加入记忆列表", type="primary"):
                         new_row = {
                             'word': final_word,
                             'meaning': final_meaning,
                             'gender': final_gender,
-                            'example': final_example,
+                            'example': "", # 留空
                             'last_review': None,
                             'next_review': date.today().isoformat(),
                             'interval': 0
                         }
                         st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                        st.toast(f"已保存: {final_word}！", icon="🎉")
+                        st.toast(f"已保存: {final_word}", icon="🎉")
                         st.cache_data.clear()
             else:
                 st.error("查询失败 (可能是网络原因)，请稍后再试。")
 
 # ==========================================
-# 6. 背单词模式 (复习)
+# 6. 背单词模式 (无例句版)
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
     
@@ -316,6 +297,7 @@ elif app_mode == "📖 背单词 (Review)":
         progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
         st.progress(max(0.0, min(1.0, progress)))
         
+        # 样式优化：去掉了例句的CSS
         st.markdown("""
         <style>
             .flash-card {
@@ -323,9 +305,9 @@ elif app_mode == "📖 背单词 (Review)":
                 border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
                 text-align: center; margin-bottom: 20px;
             }
-            .word-title { font-size: 48px; color: #2c3e50; font-family: 'Playfair Display', serif; }
-            .word-meaning { font-size: 24px; color: #e67e22; font-family: 'Patrick Hand', sans-serif; }
-            .word-meta { color: #95a5a6; font-size: 18px; }
+            .word-title { font-size: 52px; color: #2c3e50; font-family: 'Playfair Display', serif; margin-bottom: 10px; }
+            .word-meaning { font-size: 28px; color: #e67e22; font-family: 'Patrick Hand', sans-serif; }
+            .word-meta { color: #95a5a6; font-size: 20px; font-family: 'Patrick Hand', sans-serif;}
         </style>
         """, unsafe_allow_html=True)
 
@@ -334,6 +316,7 @@ elif app_mode == "📖 背单词 (Review)":
             st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
         if not st.session_state.show_back:
+            # 正面
             st.markdown(f"""
             <div class="flash-card">
                 <div style="color:#ccc; margin-bottom:10px;">点击下方按钮翻牌</div>
@@ -345,17 +328,16 @@ elif app_mode == "📖 背单词 (Review)":
                 st.session_state.show_back = True
                 st.rerun()
         else:
+            # 背面：去掉了例句部分，只保留单词、词性和意思
             st.markdown(f"""
             <div class="flash-card">
                 <div class="word-title">{current_word_data['word']}</div>
                 <div class="word-meta">{current_word_data.get('gender', '')}</div>
-                <hr style="opacity:0.2">
+                <hr style="opacity:0.2; margin: 20px 0;">
                 <div class="word-meaning">“ {current_word_data['meaning']} ”</div>
-                <div style="margin-top:20px; color:#555; font-style:italic;">
-                    {current_word_data.get('example', '')}
-                </div>
             </div>
             """, unsafe_allow_html=True)
+            
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("✅ 认识", use_container_width=True, type="primary"):
@@ -370,5 +352,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.session_state.show_back = False
                     st.rerun()
 
-st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Wiktionary & Python</div>", unsafe_allow_html=True)
-
+st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Python</div>", unsafe_allow_html=True)
