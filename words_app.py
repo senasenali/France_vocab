@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import random
 import io
 import json
-import google.generativeai as genai
+import requests  # <--- 核心改动：使用 requests 直接访问
 from gtts import gTTS
 
 # ==========================================
@@ -34,53 +34,70 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. AI 核心功能 (兼容版) ---
+# --- B. AI 核心功能 (HTTP 请求版 - 专治版本不兼容) ---
 def ask_gemini_for_word_info(api_key, word):
     """
-    调用 Gemini API 获取单词的详情
-    使用 gemini-pro 模型，兼容性更好
+    直接通过 HTTP 请求访问 Google Gemini API，
+    避开 Streamlit Cloud 上的旧版本库依赖问题。
     """
     if not api_key:
         return None, "请先在侧边栏输入 API Key"
     
+    # API 地址 (使用 gemini-1.5-flash)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    # 提示词
+    prompt_text = f"""
+    你是一个法语老师。请分析单词 "{word}"。
+    请直接返回一个纯 JSON 字符串，不要使用 Markdown 格式。
+    JSON 格式必须严格如下:
+    {{
+        "meaning": "中文含义(简练)",
+        "gender": "词性(如 m. / f. / v.)",
+        "example": "简短的法语例句"
+    }}
+    """
+    
+    # 请求体
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+
     try:
-        # 配置 API
-        genai.configure(api_key=api_key)
+        # 发送请求
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
         
-        # 使用旧版稳定模型 gemini-pro
-        # 注意：这里我们不使用 response_mime_type 参数，防止旧库报错
-        model = genai.GenerativeModel('gemini-pro')
+        if response.status_code != 200:
+            return None, f"请求失败 (代码 {response.status_code}): {response.text}"
+            
+        # 解析返回结果
+        result = response.json()
         
-        prompt = f"""
-        你是一个法语老师。请分析单词 "{word}"。
-        请直接返回一个纯 JSON 字符串。
-        严禁使用 Markdown 格式 (不要写 ```json ... ```)。
-        
-        JSON 格式如下:
-        {{
-            "meaning": "中文含义(简练)",
-            "gender": "词性(如 m. / f. / v.)",
-            "example": "简短的法语例句"
-        }}
-        """
-        
-        response = model.generate_content(prompt)
-        
-        # 手动清理数据 (防止 AI 有时候还是会加 markdown 符号)
-        clean_text = response.text.strip()
+        # 提取文本内容
+        # Google API 的返回结构比较深: candidates -> content -> parts -> text
+        try:
+            raw_text = result['candidates'][0]['content']['parts'][0]['text']
+        except (KeyError, IndexError):
+            return None, "AI 返回的数据格式无法解析"
+
+        # 清理 Markdown (防止 AI 还是加了 ```json)
+        clean_text = raw_text.strip()
         if clean_text.startswith("```json"):
             clean_text = clean_text[7:]
         if clean_text.startswith("```"):
             clean_text = clean_text[3:]
         if clean_text.endswith("```"):
             clean_text = clean_text[:-3]
-        
-        # 解析 JSON
-        result_dict = json.loads(clean_text)
-        return result_dict, None
+            
+        # 转为字典
+        return json.loads(clean_text), None
 
     except Exception as e:
-        return None, f"AI 调用失败: {str(e)}"
+        return None, f"连接错误: {str(e)}"
 
 # --- C. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
@@ -124,22 +141,19 @@ if 'df_all' not in st.session_state:
 df = st.session_state.df_all
 
 # ==========================================
-# 4. 侧边栏 (增加 API Key 输入框)
+# 4. 侧边栏
 # ==========================================
 with st.sidebar:
     st.title("🇫🇷 Menu Français")
     
-    # --- API Key 配置 ---
     with st.expander("🔑 AI 设置 (必填)", expanded=not bool(st.session_state.get('gemini_key'))):
-        user_api_key = st.text_input("输入 Google Gemini API Key:", type="password", help="去 aistudio.google.com 免费申请")
+        user_api_key = st.text_input("输入 Google Gemini API Key:", type="password")
         if user_api_key:
             st.session_state['gemini_key'] = user_api_key
             st.success("已就绪!")
     
     st.divider()
-    
     app_mode = st.radio("选择模式", ["🔍 AI 查单词 (Dictionary)", "📖 背单词 (Review)"])
-    
     st.divider()
     st.caption("💾 数据同步")
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
@@ -156,17 +170,14 @@ with st.sidebar:
 # ==========================================
 if app_mode == "🔍 AI 查单词 (Dictionary)":
     st.header("🤖 AI 智能词典")
-    st.caption("由 Google Gemini 提供支持")
     
     col_search, col_btn = st.columns([4, 1])
     with col_search:
         search_query = st.text_input("输入法语单词:", placeholder="例如: chat").strip()
     
-    # 预初始化变量
     auto_cn, auto_pos, auto_ex = "", "", ""
 
     if search_query:
-        # 1. 查重
         match = df[df['word'].str.lower() == search_query.lower()]
         if not match.empty:
             st.success("✅ 单词已存在！")
@@ -174,24 +185,21 @@ if app_mode == "🔍 AI 查单词 (Dictionary)":
             st.info(f"**{exist_word['word']}** ({exist_word['gender']}) : {exist_word['meaning']}")
             st.caption(f"例句: {exist_word['example']}")
         else:
-            # 2. 调用 AI
             api_key = st.session_state.get('gemini_key')
             
             if not api_key:
-                st.warning("⚠️ 请先在侧边栏输入 Google API Key 才能使用 AI 功能。")
+                st.warning("⚠️ 请先在侧边栏输入 Google API Key。")
             else:
-                with st.spinner("🤖 AI 正在思考词性和造句..."):
+                with st.spinner("🤖 AI 正在思考..."):
                     ai_result, error_msg = ask_gemini_for_word_info(api_key, search_query)
                 
                 if error_msg:
                     st.error(error_msg)
                 elif ai_result:
-                    # 获取 AI 的结果
                     auto_cn = ai_result.get('meaning', '')
                     auto_pos = ai_result.get('gender', '')
                     auto_ex = ai_result.get('example', '')
 
-                    # 显示结果
                     st.markdown(f"### 🇫🇷 {search_query}")
                     audio = get_audio_bytes(search_query)
                     if audio: st.audio(audio, format='audio/mp3')
@@ -230,7 +238,6 @@ if app_mode == "🔍 AI 查单词 (Dictionary)":
 # 6. 背单词模式 (不变)
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
-    
     if 'study_queue' not in st.session_state:
         today_str = date.today().isoformat()
         mask = (st.session_state.df_all['next_review'] <= today_str) | (st.session_state.df_all['next_review'].isna())
@@ -318,5 +325,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.session_state.show_back = False
                     st.rerun()
 
-st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI</div>", unsafe_allow_html=True)
-
+st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI (REST API)</div>", unsafe_allow_html=True)
