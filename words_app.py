@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import random
 import io
 import json
-import requests  # <--- 核心改动：使用 requests 直接访问
+import requests
 from gtts import gTTS
 
 # ==========================================
@@ -34,16 +34,42 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. AI 核心功能 (HTTP 请求版 - 语法安全修正) ---
+# --- B. AI 核心功能 (自动侦测模型版) ---
+def get_available_model(api_key):
+    """
+    询问 Google 当前 Key 能用哪些模型，防止 404 错误
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            # 遍历所有模型，找到第一个包含 'generateContent' 能力的 gemini 模型
+            for model in data.get('models', []):
+                name = model.get('name', '')
+                methods = model.get('supportedGenerationMethods', [])
+                if 'gemini' in name and 'generateContent' in methods:
+                    return name # 比如返回 'models/gemini-1.5-flash'
+    except Exception:
+        pass
+    # 如果侦测失败，返回一个最常用的备选
+    return "models/gemini-1.5-flash"
+
 def ask_gemini_for_word_info(api_key, word):
     if not api_key:
         return None, "请先在侧边栏输入 API Key"
     
-    # 使用 gemini-pro (稳定)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={api_key}"
+    # 1. 自动获取正确的模型名称
+    model_name = get_available_model(api_key)
     
-    # 🌟 修改重点：使用 + 号拼接字符串，避免 f-string 的大括号冲突
-    # 这样下面的 JSON 示例就可以直接写 { }，不用写 {{ }}，更清晰，不出错
+    # 2. 构建 URL (使用动态获取的模型名)
+    # model_name 格式通常是 "models/gemini-..."
+    if not model_name.startswith("models/"):
+        model_name = f"models/{model_name}"
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={api_key}"
+    
+    # 3. 提示词 (使用字符串拼接，防止语法错误)
     prompt_text = (
         '你是一个法语老师。请分析单词 "' + word + '"。\n'
         '请务必返回纯 JSON 格式，不要包含 Markdown 标记 (如 ```json)。\n'
@@ -55,40 +81,29 @@ def ask_gemini_for_word_info(api_key, word):
         '}'
     )
     
-    # 请求体
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt_text}]
-        }]
-    }
-    
+    payload = { "contents": [{ "parts": [{"text": prompt_text}] }] }
     headers = {'Content-Type': 'application/json'}
 
     try:
-        # 发送请求
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
         
         if response.status_code != 200:
-            return None, f"请求失败 (Code {response.status_code}): {response.text}"
+            # 如果报错，把模型名字也打印出来，方便调试
+            return None, f"请求失败 (Model: {model_name}, Code {response.status_code}): {response.text}"
             
-        # 解析返回结果
         result = response.json()
         
         try:
             raw_text = result['candidates'][0]['content']['parts'][0]['text']
         except (KeyError, IndexError):
-            return None, "AI 返回的数据结构异常，请重试"
+            return None, "AI 返回的数据结构异常"
 
-        # 清理 Markdown
-        clean_text = raw_text.strip()
-        clean_text = clean_text.replace("```json", "").replace("```", "").strip()
-            
-        # 转为字典
+        clean_text = raw_text.strip().replace("```json", "").replace("```", "").strip()
         return json.loads(clean_text), None
 
     except Exception as e:
         return None, f"连接错误: {str(e)}"
-        
+
 # --- C. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
@@ -140,12 +155,17 @@ with st.sidebar:
         user_api_key = st.text_input("输入 Google Gemini API Key:", type="password")
         if user_api_key:
             st.session_state['gemini_key'] = user_api_key
-            st.success("已就绪!")
+            # 加一个测试按钮，让用户确认 Key 是否有效
+            if st.button("🔍 测试连接 & 检测模型"):
+                with st.spinner("正在询问 Google..."):
+                    detected_model = get_available_model(user_api_key)
+                    st.success(f"连接成功! 将使用模型: {detected_model}")
     
     st.divider()
     app_mode = st.radio("选择模式", ["🔍 AI 查单词 (Dictionary)", "📖 背单词 (Review)"])
     st.divider()
-    st.caption("💾 数据同步")
+    
+    # 下载按钮
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
         label="📥 下载最新 vocab.csv",
@@ -180,11 +200,12 @@ if app_mode == "🔍 AI 查单词 (Dictionary)":
             if not api_key:
                 st.warning("⚠️ 请先在侧边栏输入 Google API Key。")
             else:
-                with st.spinner("🤖 AI 正在思考..."):
+                with st.spinner("🤖 AI 正在智能分析..."):
                     ai_result, error_msg = ask_gemini_for_word_info(api_key, search_query)
                 
                 if error_msg:
                     st.error(error_msg)
+                    st.caption("提示: 请检查 API Key 是否正确，或者在侧边栏点击'测试连接'看看发生了什么。")
                 elif ai_result:
                     auto_cn = ai_result.get('meaning', '')
                     auto_pos = ai_result.get('gender', '')
@@ -274,46 +295,4 @@ elif app_mode == "📖 背单词 (Review)":
         </style>
         """, unsafe_allow_html=True)
 
-        audio_bytes = get_audio_bytes(current_word_data['word'])
-        if audio_bytes:
-            st.audio(audio_bytes, format='audio/mp3', autoplay=True)
-
-        if not st.session_state.show_back:
-            st.markdown(f"""
-            <div class="flash-card">
-                <div style="color:#ccc; margin-bottom:10px;">点击下方按钮翻牌</div>
-                <div class="word-title">{current_word_data['word']}</div>
-                <br>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🔍 查看答案", use_container_width=True):
-                st.session_state.show_back = True
-                st.rerun()
-        else:
-            st.markdown(f"""
-            <div class="flash-card">
-                <div class="word-title">{current_word_data['word']}</div>
-                <div class="word-meta">{current_word_data.get('gender', '')}</div>
-                <hr style="opacity:0.2">
-                <div class="word-meaning">“ {current_word_data['meaning']} ”</div>
-                <div style="margin-top:20px; color:#555; font-style:italic;">
-                    {current_word_data.get('example', '')}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("✅ 认识", use_container_width=True, type="primary"):
-                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
-                    st.session_state.study_queue.pop(0)
-                    st.session_state.show_back = False
-                    st.rerun()
-            with c2:
-                if st.button("❌ 模糊", use_container_width=True):
-                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
-                    st.session_state.study_queue.pop(0)
-                    st.session_state.show_back = False
-                    st.rerun()
-
-st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Gemini AI (REST API)</div>", unsafe_allow_html=True)
-
+        audio_bytes = g
