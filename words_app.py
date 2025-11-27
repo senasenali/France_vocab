@@ -45,11 +45,12 @@ def translate_text(text):
     except Exception:
         return ""
 
-# --- C. 爬虫功能 (维基词典 Wiktionary) ---
+# --- C. 爬虫功能 (增强版：精准抓取阴阳性与过滤例句) ---
 @st.cache_data(show_spinner="正在查阅维基词典...")
 def get_wiktionary_details(word):
     """
-    爬取 fr.wiktionary.org，获取词性和例句
+    爬取 fr.wiktionary.org
+    修复了 'chat' 抓取不到阴阳性和抓到错误例句的问题
     """
     word = word.strip().lower()
     url = f"https://fr.wiktionary.org/wiki/{word}"
@@ -65,53 +66,92 @@ def get_wiktionary_details(word):
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # 1. 抓取词性
-            # 寻找 class="titredef" (名词/动词等标题)
-            pos_tags = soup.find_all('span', class_='titredef')
-            for tag in pos_tags:
-                text = tag.get_text().lower()
-                if 'nom' in text:
-                    # 进一步找性别 (class="genre")
-                    gender_span = soup.find('span', class_='genre')
-                    if gender_span:
-                        g_text = gender_span.get_text()
-                        if 'm' in g_text: pos = "m. (阳性名词)"
-                        elif 'f' in g_text: pos = "f. (阴性名词)"
-                    else:
-                        pos = "n. (名词)"
-                    break # 找到第一个主要词性就停止
-                elif 'verbe' in text:
-                    pos = "v. (动词)"
+            # === 1. 精准抓取性别 (Gender) ===
+            # 策略：直接在“法语”部分的定义行里找 "masculin" 或 "féminin" 关键字
+            # 维基词典通常在 class="ligne-de-forme" 或者定义头里写性别
+            
+            # 先找到法语区 (id="Français")
+            fr_section = soup.find(id="Français")
+            if fr_section:
+                # 缩小搜索范围，只看法语部分
+                parent = fr_section.find_parent()
+                # 寻找包含性别的行
+                gender_line = parent.find_next('span', class_='ligne-de-forme')
+                
+                if gender_line:
+                    text = gender_line.get_text().lower()
+                    if 'masculin' in text or ' m' in text:
+                        pos = "m. (阳性)"
+                    elif 'féminin' in text or ' f' in text:
+                        pos = "f. (阴性)"
+                
+                # 如果上面没找到，尝试在所有 title="Nom commun" 附近找
+                if pos == "未知":
+                    all_pos_headers = soup.find_all('span', class_='titredef')
+                    for header in all_pos_headers:
+                        if 'nom' in header.get_text().lower():
+                            # 往后找一行
+                            next_line = header.find_next('p')
+                            if next_line:
+                                txt = next_line.get_text().lower()
+                                if 'masculin' in txt: 
+                                    pos = "m. (阳性)"
+                                    break
+                                elif 'féminin' in txt: 
+                                    pos = "f. (阴性)"
+                                    break
+                            pos = "n. (名词)" # 找到了名词但没分出性别
+            
+            # === 2. 智能抓取例句 (Example) ===
+            # 策略：过滤掉短标签（如 Félinologie），只保留像句子的文本
+            
+            # 优先找明确标记为例句的 span
+            ex_tags = soup.find_all('span', class_='exemple')
+            for ex in ex_tags:
+                txt = ex.get_text().strip()
+                if len(txt) > 15: # 长度过滤
+                    example = txt
                     break
-                elif 'adjectif' in text:
-                    pos = "adj. (形容词)"
-                    break
+            
+            # 如果没找到，遍历所有列表里的斜体字 (维基词典惯用格式)
+            if not example:
+                li_tags = soup.find_all('li')
+                for li in li_tags:
+                    # 必须包含斜体 (通常例句是斜体)
+                    italic = li.find('i')
+                    if italic:
+                        raw_text = italic.get_text().strip()
+                        
+                        # === 核心过滤逻辑 ===
+                        # 1. 长度必须 > 15 (过滤掉 "Félinologie")
+                        # 2. 不能以 "(" 开头 (过滤掉解释性文字)
+                        # 3. 必须包含空格 (确保是句子)
+                        if len(raw_text) > 15 and not raw_text.startswith('(') and ' ' in raw_text:
+                            # 4. (可选) 最好包含原单词
+                            # if word in raw_text.lower(): 
+                            example = raw_text
+                            break
 
-            # 2. 抓取例句
-            # 维基词典例句通常在 li > i 标签里
-            # 我们遍历页面上所有的 li 标签，找包含斜体字的
-            li_tags = soup.find_all('li')
-            for li in li_tags:
-                italic = li.find('i')
-                if italic:
-                    ex_text = italic.get_text().strip()
-                    # 简单的过滤：长度适中，且包含我们要查的词(模糊匹配)
-                    if 10 < len(ex_text) < 150:
-                        example = ex_text
-                        break
-        
-        # 3. 兜底策略：如果没抓到，根据词性自动生成简单句子
+        # === 3. 兜底造句 (如果还是没抓到) ===
         if not example:
             if "m." in pos: example = f"Le {word} est ici."
             elif "f." in pos: example = f"La {word} est belle."
             elif "v." in pos: example = f"Je veux {word}."
             elif "adj" in pos: example = f"C'est très {word}."
+        
+        # 如果词性依然是未知，尝试根据常见后缀猜一下 (Beta)
+        if pos == "未知" or pos == "n. (名词)":
+            if word.endswith('e') and not word.endswith('age') and not word.endswith('isme'):
+                suggestion = "f. (阴性?)"
+            else:
+                suggestion = "m. (阳性?)"
+            if pos == "n. (名词)": pos = f"n. {suggestion}"
 
         return pos, example
 
     except Exception:
-        return "", ""
-
+        return "未知", ""
+        
 # --- D. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
@@ -331,3 +371,4 @@ elif app_mode == "📖 背单词 (Review)":
                     st.rerun()
 
 st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Wiktionary & Python</div>", unsafe_allow_html=True)
+
