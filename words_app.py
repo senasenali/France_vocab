@@ -4,15 +4,16 @@ import datetime
 from datetime import date, timedelta
 import random
 import io
-import json
 import requests
+from bs4 import BeautifulSoup
 from gtts import gTTS
+from deep_translator import GoogleTranslator
 
 # ==========================================
 # 1. 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="Le Menu du Jour - AI版", 
+    page_title="Le Menu du Jour - Classic", 
     page_icon="🥐",
     layout="centered",
     initial_sidebar_state="expanded"
@@ -34,77 +35,84 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. AI 核心功能 (自动侦测模型版) ---
-def get_available_model(api_key):
-    """
-    询问 Google 当前 Key 能用哪些模型，防止 404 错误
-    """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+# --- B. 翻译功能 (使用 deep-translator) ---
+@st.cache_data(show_spinner=False)
+def translate_text(text):
     try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            # 遍历所有模型，找到第一个包含 'generateContent' 能力的 gemini 模型
-            for model in data.get('models', []):
-                name = model.get('name', '')
-                methods = model.get('supportedGenerationMethods', [])
-                if 'gemini' in name and 'generateContent' in methods:
-                    return name # 比如返回 'models/gemini-1.5-flash'
+        # 使用 Google 翻译接口
+        cn_meaning = GoogleTranslator(source='fr', target='zh-CN').translate(text)
+        return cn_meaning
     except Exception:
-        pass
-    # 如果侦测失败，返回一个最常用的备选
-    return "models/gemini-1.5-flash"
+        return ""
 
-def ask_gemini_for_word_info(api_key, word):
-    if not api_key:
-        return None, "请先在侧边栏输入 API Key"
+# --- C. 爬虫功能 (维基词典 Wiktionary) ---
+@st.cache_data(show_spinner="正在查阅维基词典...")
+def get_wiktionary_details(word):
+    """
+    爬取 fr.wiktionary.org，获取词性和例句
+    """
+    word = word.strip().lower()
+    url = f"https://fr.wiktionary.org/wiki/{word}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
     
-    # 1. 自动获取正确的模型名称
-    model_name = get_available_model(api_key)
+    pos = "未知"      
+    example = ""  
     
-    # 2. 构建 URL (使用动态获取的模型名)
-    # model_name 格式通常是 "models/gemini-..."
-    if not model_name.startswith("models/"):
-        model_name = f"models/{model_name}"
-        
-    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent?key={api_key}"
-    
-    # 3. 提示词 (使用字符串拼接，防止语法错误)
-    prompt_text = (
-        '你是一个法语老师。请分析单词 "' + word + '"。\n'
-        '请务必返回纯 JSON 格式，不要包含 Markdown 标记 (如 ```json)。\n'
-        'JSON 格式必须严格如下:\n'
-        '{\n'
-        '    "meaning": "中文含义(简练)",\n'
-        '    "gender": "词性(如 m. / f. / v.)",\n'
-        '    "example": "简短的法语例句"\n'
-        '}'
-    )
-    
-    payload = { "contents": [{ "parts": [{"text": prompt_text}] }] }
-    headers = {'Content-Type': 'application/json'}
-
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
-        
-        if response.status_code != 200:
-            # 如果报错，把模型名字也打印出来，方便调试
-            return None, f"请求失败 (Model: {model_name}, Code {response.status_code}): {response.text}"
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
             
-        result = response.json()
+            # 1. 抓取词性
+            # 寻找 class="titredef" (名词/动词等标题)
+            pos_tags = soup.find_all('span', class_='titredef')
+            for tag in pos_tags:
+                text = tag.get_text().lower()
+                if 'nom' in text:
+                    # 进一步找性别 (class="genre")
+                    gender_span = soup.find('span', class_='genre')
+                    if gender_span:
+                        g_text = gender_span.get_text()
+                        if 'm' in g_text: pos = "m. (阳性名词)"
+                        elif 'f' in g_text: pos = "f. (阴性名词)"
+                    else:
+                        pos = "n. (名词)"
+                    break # 找到第一个主要词性就停止
+                elif 'verbe' in text:
+                    pos = "v. (动词)"
+                    break
+                elif 'adjectif' in text:
+                    pos = "adj. (形容词)"
+                    break
+
+            # 2. 抓取例句
+            # 维基词典例句通常在 li > i 标签里
+            # 我们遍历页面上所有的 li 标签，找包含斜体字的
+            li_tags = soup.find_all('li')
+            for li in li_tags:
+                italic = li.find('i')
+                if italic:
+                    ex_text = italic.get_text().strip()
+                    # 简单的过滤：长度适中，且包含我们要查的词(模糊匹配)
+                    if 10 < len(ex_text) < 150:
+                        example = ex_text
+                        break
         
-        try:
-            raw_text = result['candidates'][0]['content']['parts'][0]['text']
-        except (KeyError, IndexError):
-            return None, "AI 返回的数据结构异常"
+        # 3. 兜底策略：如果没抓到，根据词性自动生成简单句子
+        if not example:
+            if "m." in pos: example = f"Le {word} est ici."
+            elif "f." in pos: example = f"La {word} est belle."
+            elif "v." in pos: example = f"Je veux {word}."
+            elif "adj" in pos: example = f"C'est très {word}."
 
-        clean_text = raw_text.strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(clean_text), None
+        return pos, example
 
-    except Exception as e:
-        return None, f"连接错误: {str(e)}"
+    except Exception:
+        return "", ""
 
-# --- C. 记忆曲线算法 ---
+# --- D. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
     current_interval = int(word_row.get('interval', 0))
@@ -119,7 +127,7 @@ def update_word_progress(word_row, quality):
     return word_row
 
 # ==========================================
-# 3. 数据加载
+# 3. 数据加载 (安全版)
 # ==========================================
 REQUIRED_COLS = ['word', 'meaning', 'gender', 'example']
 SRS_COLS = ['last_review', 'next_review', 'interval']
@@ -132,6 +140,7 @@ def load_data():
             if col not in df.columns:
                 df[col] = None if col == 'last_review' else 0
         
+        # 强制修复日期格式 (防止 TypeError)
         if 'next_review' in df.columns:
             df['next_review'] = pd.to_datetime(df['next_review'], errors='coerce')
             df['next_review'] = df['next_review'].dt.strftime('%Y-%m-%d')
@@ -151,21 +160,9 @@ df = st.session_state.df_all
 with st.sidebar:
     st.title("🇫🇷 Menu Français")
     
-    with st.expander("🔑 AI 设置 (必填)", expanded=not bool(st.session_state.get('gemini_key'))):
-        user_api_key = st.text_input("输入 Google Gemini API Key:", type="password")
-        if user_api_key:
-            st.session_state['gemini_key'] = user_api_key
-            # 加一个测试按钮，让用户确认 Key 是否有效
-            if st.button("🔍 测试连接 & 检测模型"):
-                with st.spinner("正在询问 Google..."):
-                    detected_model = get_available_model(user_api_key)
-                    st.success(f"连接成功! 将使用模型: {detected_model}")
-    
+    app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
     st.divider()
-    app_mode = st.radio("选择模式", ["🔍 AI 查单词 (Dictionary)", "📖 背单词 (Review)"])
-    st.divider()
-    
-    # 下载按钮
+    st.caption("💾 数据同步")
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
         label="📥 下载最新 vocab.csv",
@@ -176,18 +173,20 @@ with st.sidebar:
     )
 
 # ==========================================
-# 5. 查单词模式 (AI版)
+# 5. 查单词模式 (Wiki + Translation)
 # ==========================================
-if app_mode == "🔍 AI 查单词 (Dictionary)":
-    st.header("🤖 AI 智能词典")
+if app_mode == "🔍 查单词 (Dictionary)":
+    st.header("🔍 Dictionnaire (Wiki版)")
     
     col_search, col_btn = st.columns([4, 1])
     with col_search:
         search_query = st.text_input("输入法语单词:", placeholder="例如: chat").strip()
     
+    # 预初始化
     auto_cn, auto_pos, auto_ex = "", "", ""
 
     if search_query:
+        # 查重
         match = df[df['word'].str.lower() == search_query.lower()]
         if not match.empty:
             st.success("✅ 单词已存在！")
@@ -195,60 +194,55 @@ if app_mode == "🔍 AI 查单词 (Dictionary)":
             st.info(f"**{exist_word['word']}** ({exist_word['gender']}) : {exist_word['meaning']}")
             st.caption(f"例句: {exist_word['example']}")
         else:
-            api_key = st.session_state.get('gemini_key')
-            
-            if not api_key:
-                st.warning("⚠️ 请先在侧边栏输入 Google API Key。")
-            else:
-                with st.spinner("🤖 AI 正在智能分析..."):
-                    ai_result, error_msg = ask_gemini_for_word_info(api_key, search_query)
+            # 联网查询
+            with st.spinner("🔍 正在检索维基词典..."):
+                # 1. 翻译意思
+                auto_cn = translate_text(search_query)
+                # 2. 爬取详情
+                auto_pos, auto_ex = get_wiktionary_details(search_query)
+
+            if auto_cn:
+                st.markdown(f"### 🇫🇷 {search_query}")
+                audio = get_audio_bytes(search_query)
+                if audio: st.audio(audio, format='audio/mp3')
                 
-                if error_msg:
-                    st.error(error_msg)
-                    st.caption("提示: 请检查 API Key 是否正确，或者在侧边栏点击'测试连接'看看发生了什么。")
-                elif ai_result:
-                    auto_cn = ai_result.get('meaning', '')
-                    auto_pos = ai_result.get('gender', '')
-                    auto_ex = ai_result.get('example', '')
+                c1, c2, c3 = st.columns([1, 1, 2])
+                c1.metric("中文意思", auto_cn)
+                c2.metric("词性", auto_pos if auto_pos else "未知")
+                c3.info(f"**例句:** {auto_ex}" if auto_ex else "暂无")
 
-                    st.markdown(f"### 🇫🇷 {search_query}")
-                    audio = get_audio_bytes(search_query)
-                    if audio: st.audio(audio, format='audio/mp3')
+                st.divider()
+                st.write("📝 **加入生词本**")
+                with st.form("add_word_form"):
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        final_word = st.text_input("单词", value=search_query)
+                        final_gender = st.text_input("词性", value=auto_pos)
+                    with col_b:
+                        final_meaning = st.text_input("中文意思", value=auto_cn)
+                        final_example = st.text_input("例句", value=auto_ex)
                     
-                    c1, c2, c3 = st.columns([1, 1, 2])
-                    c1.metric("中文意思", auto_cn)
-                    c2.metric("词性", auto_pos)
-                    c3.info(f"**AI造句:** {auto_ex}")
-
-                    st.divider()
-                    st.write("📝 **加入生词本**")
-                    with st.form("add_word_form"):
-                        col_a, col_b = st.columns(2)
-                        with col_a:
-                            final_word = st.text_input("单词", value=search_query)
-                            final_gender = st.text_input("词性", value=auto_pos)
-                        with col_b:
-                            final_meaning = st.text_input("中文意思", value=auto_cn)
-                            final_example = st.text_input("例句", value=auto_ex)
-                        
-                        if st.form_submit_button("➕ 加入记忆列表"):
-                            new_row = {
-                                'word': final_word,
-                                'meaning': final_meaning,
-                                'gender': final_gender,
-                                'example': final_example,
-                                'last_review': None,
-                                'next_review': date.today().isoformat(),
-                                'interval': 0
-                            }
-                            st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                            st.toast(f"已保存: {final_word}！", icon="🎉")
-                            st.cache_data.clear()
+                    if st.form_submit_button("➕ 加入记忆列表"):
+                        new_row = {
+                            'word': final_word,
+                            'meaning': final_meaning,
+                            'gender': final_gender,
+                            'example': final_example,
+                            'last_review': None,
+                            'next_review': date.today().isoformat(),
+                            'interval': 0
+                        }
+                        st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
+                        st.toast(f"已保存: {final_word}！", icon="🎉")
+                        st.cache_data.clear()
+            else:
+                st.error("查询失败 (可能是网络原因)，请稍后再试。")
 
 # ==========================================
-# 6. 背单词模式 (不变)
+# 6. 背单词模式 (复习)
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
+    
     if 'study_queue' not in st.session_state:
         today_str = date.today().isoformat()
         mask = (st.session_state.df_all['next_review'] <= today_str) | (st.session_state.df_all['next_review'].isna())
@@ -295,4 +289,45 @@ elif app_mode == "📖 背单词 (Review)":
         </style>
         """, unsafe_allow_html=True)
 
-        audio_bytes = g
+        audio_bytes = get_audio_bytes(current_word_data['word'])
+        if audio_bytes:
+            st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+
+        if not st.session_state.show_back:
+            st.markdown(f"""
+            <div class="flash-card">
+                <div style="color:#ccc; margin-bottom:10px;">点击下方按钮翻牌</div>
+                <div class="word-title">{current_word_data['word']}</div>
+                <br>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🔍 查看答案", use_container_width=True):
+                st.session_state.show_back = True
+                st.rerun()
+        else:
+            st.markdown(f"""
+            <div class="flash-card">
+                <div class="word-title">{current_word_data['word']}</div>
+                <div class="word-meta">{current_word_data.get('gender', '')}</div>
+                <hr style="opacity:0.2">
+                <div class="word-meaning">“ {current_word_data['meaning']} ”</div>
+                <div style="margin-top:20px; color:#555; font-style:italic;">
+                    {current_word_data.get('example', '')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("✅ 认识", use_container_width=True, type="primary"):
+                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
+                    st.session_state.study_queue.pop(0)
+                    st.session_state.show_back = False
+                    st.rerun()
+            with c2:
+                if st.button("❌ 模糊", use_container_width=True):
+                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
+                    st.session_state.study_queue.pop(0)
+                    st.session_state.show_back = False
+                    st.rerun()
+
+st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Wiktionary & Python</div>", unsafe_allow_html=True)
