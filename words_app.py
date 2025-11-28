@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. 🎨 UI/UX 设计 (Ratatouille & Ernest Style)
+# 2. 🎨 UI/UX 设计 (Ultimate Fix)
 # ==========================================
 st.markdown("""
 <style>
@@ -44,61 +44,68 @@ st.markdown("""
     }
 
     /* ============================================================
-       🛑 1. 输入框深度修复 (Targeting BaseWeb)
+       🛑 1. 输入框终极修复 (消灭灰底和红框)
        ============================================================ */
     
     /* 隐藏 Label */
     div[data-testid="stTextInput"] label { display: none; }
 
-    /* 锁定输入框的最底层容器 */
+    /* 针对 BaseWeb Input 容器的样式覆盖 */
     div[data-baseweb="input"] {
-        background-color: #FFFEFA !important;
-        border: 2px solid #E0D6CC !important; 
+        background-color: #FFFEFA !important; /* 强制米色背景，覆盖灰色 */
+        border: 2px solid #E0D6CC !important; /* 默认浅褐色边框 */
         border-radius: 50px !important;
-        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05) !important; 
-        padding: 5px 10px !important; /* 调整内边距 */
+        box-shadow: none !important; /* 去掉默认的灰色阴影 */
+        padding: 5px 10px !important;
     }
 
-    /* 锁定：鼠标点击/输入时的状态 (Focus) */
+    /* 鼠标悬停时 (Hover) - 保持米色，不要变灰 */
+    div[data-baseweb="input"]:hover {
+        border-color: #C65D3B !important; /* 悬停时边框变铜色 */
+        background-color: #FFFEFA !important;
+    }
+
+    /* 鼠标点击输入时 (Focus) - 强制铜色，去掉默认红色 */
     div[data-baseweb="input"]:focus-within {
-        border-color: #C65D3B !important; /* 强制铜锅色 */
-        background-color: #FFF !important;
-        box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.15) !important; /* 柔和铜色光晕，覆盖默认红框 */
+        border-color: #C65D3B !important; 
+        background-color: #FFFEFA !important; 
+        box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.15) !important; /* 柔和铜色光晕 */
     }
 
-    /* 输入文字的样式 */
+    /* 输入文字本身 */
     input[type="text"] {
         color: #5D4037 !important;
         font-family: 'Patrick Hand', cursive !important;
         font-size: 24px !important;
         text-align: center !important;
-        caret-color: #C65D3B !important; /* 光标颜色也改成铜色 */
     }
 
     /* ============================================================
-       🐭 2. 小老鼠按钮：完全透明化
+       🐭 2. 小老鼠按钮：彻底透明化 (无底色无边框)
        ============================================================ */
     
-    /* 针对放在列(column)里的小老鼠按钮进行覆盖 */
+    /* 定位到 column 里的按钮 */
     div[data-testid="column"] button {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        text-shadow: none !important;
-        padding: 0px !important;
-        font-size: 36px !important; /* 图标大一点 */
+        background-color: transparent !important; /* 关键：透明背景 */
+        border: none !important;                  /* 关键：无边框 */
+        box-shadow: none !important;              /* 关键：无阴影 */
+        padding: 0 !important;
+        font-size: 36px !important;
         line-height: 1 !important;
+        overflow: visible !important;
     }
 
-    /* 悬停、点击、聚焦状态全部去除背景 */
+    /* 覆盖所有交互状态 (悬停、点击、聚焦) */
     div[data-testid="column"] button:hover,
     div[data-testid="column"] button:active,
-    div[data-testid="column"] button:focus {
-        background-color: transparent !important;
+    div[data-testid="column"] button:focus,
+    div[data-testid="column"] button:focus:not(:active) {
+        background-color: transparent !important; /* 即使点击也不要有背景 */
         border: none !important;
         box-shadow: none !important;
         color: inherit !important;
-        transform: scale(1.1) rotate(10deg) !important; /* 只保留动效 */
+        transform: scale(1.15) rotate(10deg) !important; /* 只有动效 */
+        outline: none !important; /* 去掉聚焦时的轮廓线 */
     }
 
     /* ============================================================
@@ -107,7 +114,7 @@ st.markdown("""
     .menu-card {
         background-color: #FFFEFA;
         padding: 50px 30px 40px 30px;
-        margin-top: -35px; /* 负边距，让小老鼠趴在框上 */
+        margin-top: -35px; /* 让卡片上移，接住小老鼠 */
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
@@ -286,7 +293,7 @@ if app_mode == "🔍 查单词 (Dictionary)":
 
         match = df[df['word'].str.lower() == search_query.lower()]
         
-        # 准备数据
+        # 准备显示数据
         if not match.empty:
             exist_word = match.iloc[0]
             display_word = exist_word['word']
@@ -304,7 +311,6 @@ if app_mode == "🔍 查单词 (Dictionary)":
 
         if display_meaning:
             # === 小老鼠按钮 (右上角) ===
-            # 使用空列占位，把按钮挤到最右边
             col_empty, col_audio = st.columns([10, 1])
             with col_audio:
                 if st.button("🐁", key="replay_dict", help="重听"):
