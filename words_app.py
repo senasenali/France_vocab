@@ -20,122 +20,93 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. 🎨 UI/UX 设计 (水彩 + 料理鼠王风格)
+# 2. 🎨 UI/UX 设计 (Ratatouille & Ernest Style)
 # ==========================================
 st.markdown("""
 <style>
     /* 引入字体 */
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Patrick+Hand&display=swap');
 
-    /* --- 全局背景：艾特熊的水彩画纸质感 --- */
+    /* --- 全局背景 --- */
     .stApp {
-        background-color: #F9F7F1; /* 暖米色画纸 */
+        background-color: #F9F7F1; 
         background-image: radial-gradient(#F9F7F1 20%, #EFEBE0 100%);
     }
 
-    /* --- 侧边栏：像一本旧书的侧边 --- */
+    /* --- 侧边栏 --- */
     section[data-testid="stSidebar"] {
         background-color: #F4F0E6;
         border-right: 1px dashed #D7CCC8;
     }
 
-    /* --- 标题样式：法式餐厅菜单风格 --- */
+    /* --- 标题样式 --- */
     h1, h2, h3 {
         font-family: 'Playfair Display', serif !important;
         color: #3E2723 !important;
     }
 
-    /* --- 卡片容器：水彩晕染效果 --- */
+    /* -------------------------------------------
+       核心修改：让输入框、音频、卡片看起来像一套的
+       ------------------------------------------- */
+    
+    /* 1. 输入框美化：模仿卡片风格 */
+    div[data-testid="stTextInput"] {
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    div[data-testid="stTextInput"] input {
+        background-color: #FFFEFA; /* 卡片同款米色 */
+        border: 1px solid #E0D6CC; /* 卡片同款边框 */
+        border-radius: 12px;       /* 卡片同款圆角 */
+        padding: 12px 20px;        /* 增加内边距，更舒适 */
+        color: #5D4037;            /* 深褐色文字 */
+        font-family: 'Patrick Hand', cursive;
+        font-size: 20px;           /* 字号加大 */
+        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05); /* 柔和阴影 */
+        transition: 0.3s all;
+    }
+    /* 鼠标点进去时 */
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #C65D3B; /* 铜锅色高亮 */
+        box-shadow: 0 6px 15px rgba(198, 93, 59, 0.15);
+    }
+
+    /* 2. 音频播放器美化：对齐宽度 */
+    .stAudio {
+        width: 100% !important; /* 强制满宽 */
+        margin-top: 10px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+        overflow: hidden; /* 防止圆角溢出 */
+        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05);
+        border: 1px solid #E0D6CC;
+        background-color: #FFFEFA; /* 给播放器加个底色框 */
+    }
+
+    /* --- 卡片容器 --- */
     .menu-card {
         background-color: #FFFEFA;
         padding: 40px 30px;
-        margin-top: 20px;
+        margin-top: 10px;
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
-        /* 柔和的阴影，像纸张浮起 */
         box-shadow: 0 8px 20px rgba(93, 64, 55, 0.06); 
         text-align: center;
         position: relative;
     }
 
-    /* --- 装饰线：料理鼠王风格的双线 --- */
-    .menu-divider {
-        border-top: 3px double #C65D3B; /* 铜锅色 */
-        width: 80px;
-        margin: 20px auto;
-        opacity: 0.6;
-    }
+    /* --- 其他样式保持不变 --- */
+    .menu-divider { border-top: 3px double #C65D3B; width: 80px; margin: 20px auto; opacity: 0.6; }
+    .french-word { font-family: 'Playfair Display', serif; font-size: 56px; font-weight: 600; color: #C65D3B; margin-bottom: 10px; letter-spacing: 1px; }
+    .word-meta { font-family: 'Patrick Hand', cursive; font-size: 22px; color: #78909C; font-style: italic; }
+    .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; margin-top: 20px; background-color: #F2EFE9; display: inline-block; padding: 10px 25px; border-radius: 20px 5px 20px 5px; }
 
-    /* --- 字体系统 --- */
-    .french-word {
-        font-family: 'Playfair Display', serif;
-        font-size: 56px;
-        font-weight: 600;
-        color: #C65D3B; /* 铜红色高亮 */
-        margin-bottom: 10px;
-        letter-spacing: 1px;
-    }
-    
-    .word-meta {
-        font-family: 'Patrick Hand', cursive;
-        font-size: 22px;
-        color: #78909C; /* 艾特熊围巾的灰蓝色 */
-        font-style: italic;
-    }
-
-    .word-meaning {
-        font-family: 'Patrick Hand', cursive;
-        font-size: 30px;
-        color: #5D4037; /* 深褐墨水色 */
-        margin-top: 20px;
-        background-color: #F2EFE9; /* 像贴了一张便利贴 */
-        display: inline-block;
-        padding: 10px 25px;
-        border-radius: 20px 5px 20px 5px; /* 不规则圆角，模拟手绘 */
-    }
-
-    /* --- 按钮美化：料理鼠王的铜锅与精致感 --- */
-    div.stButton > button {
-        background-color: transparent;
-        color: #5D4037;
-        border: 2px solid #8D6E63;
-        border-radius: 30px; /* 圆润 */
-        font-family: 'Playfair Display', serif;
-        font-size: 18px;
-        padding: 10px 25px;
-        transition: 0.3s all ease;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-
-    /* 鼠标悬停：变成铜锅色背景 */
-    div.stButton > button:hover {
-        background-color: #C65D3B; /* 铜红 */
-        color: #FFF;
-        border-color: #C65D3B;
-        box-shadow: 0 5px 15px rgba(198, 93, 59, 0.3);
-        transform: translateY(-2px);
-    }
-
-    /* 主按钮 (Primary) 特殊样式 */
-    div.stButton > button[kind="primary"] {
-        border-color: #C65D3B;
-        color: #C65D3B;
-    }
-
-    /* 输入框样式：融入背景 */
-    .stTextInput input {
-        background-color: #FFFFFF;
-        border: 1px solid #D7CCC8;
-        color: #5D4037;
-        font-family: 'Patrick Hand', cursive;
-        border-radius: 10px;
-    }
-    
-    /* 进度条颜色 */
-    .stProgress > div > div > div > div {
-        background-color: #C65D3B;
-    }
+    /* 按钮样式 */
+    div.stButton > button { background-color: transparent; color: #5D4037; border: 2px solid #8D6E63; border-radius: 30px; font-family: 'Playfair Display', serif; font-size: 18px; padding: 10px 25px; transition: 0.3s all ease; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    div.stButton > button:hover { background-color: #C65D3B; color: #FFF; border-color: #C65D3B; box-shadow: 0 5px 15px rgba(198, 93, 59, 0.3); transform: translateY(-2px); }
+    div.stButton > button[kind="primary"] { border-color: #C65D3B; color: #C65D3B; }
+    .stProgress > div > div > div > div { background-color: #C65D3B; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -143,8 +114,6 @@ st.markdown("""
 # ==========================================
 # 3. 核心功能函数
 # ==========================================
-
-# --- A. 发音功能 ---
 @st.cache_data(show_spinner=False)
 def get_audio_bytes(text, lang='fr'):
     if not text or text == "Error": return None
@@ -156,7 +125,6 @@ def get_audio_bytes(text, lang='fr'):
     except Exception:
         return None
 
-# --- B. 翻译功能 ---
 @st.cache_data(show_spinner=False)
 def translate_text(text):
     try:
@@ -165,14 +133,11 @@ def translate_text(text):
     except Exception:
         return ""
 
-# --- C. 爬虫功能 (只抓词性) ---
 @st.cache_data(show_spinner="正在查阅主厨的食谱 (Wiktionary)...")
 def get_wiktionary_pos(word):
     word = word.strip().lower()
     url = f"https://fr.wiktionary.org/wiki/{word}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     pos = "未知"      
     try:
         response = requests.get(url, headers=headers, timeout=5)
@@ -182,7 +147,6 @@ def get_wiktionary_pos(word):
             if fr_section:
                 parent = fr_section.find_parent()
                 gender_line = parent.find_next('span', class_='ligne-de-forme')
-                
                 if gender_line:
                     text = gender_line.get_text().lower()
                     if 'masculin' in text or ' m' in text: pos = "m. (阳性)"
@@ -212,7 +176,6 @@ def get_wiktionary_pos(word):
     except Exception:
         return "未知"
 
-# --- D. 记忆曲线算法 ---
 def update_word_progress(word_row, quality):
     today = date.today()
     current_interval = int(word_row.get('interval', 0))
@@ -220,15 +183,11 @@ def update_word_progress(word_row, quality):
         new_interval = 1
     else:
         new_interval = 1 if current_interval == 0 else int(current_interval * 2.2)
-    
     word_row['last_review'] = today.isoformat()
     word_row['next_review'] = (today + timedelta(days=new_interval)).isoformat()
     word_row['interval'] = new_interval
     return word_row
 
-# ==========================================
-# 4. 数据加载
-# ==========================================
 REQUIRED_COLS = ['word', 'meaning', 'gender', 'example'] 
 SRS_COLS = ['last_review', 'next_review', 'interval']
 
@@ -257,10 +216,8 @@ df = st.session_state.df_all
 # ==========================================
 with st.sidebar:
     st.markdown("<h1 style='font-size:24px; color:#5D4037;'>🧑‍🍳 Chef's Kitchen</h1>", unsafe_allow_html=True)
-    
     app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
     st.divider()
-    
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
         label="📥 打包带走 (下载 CSV)",
@@ -276,11 +233,10 @@ with st.sidebar:
 if app_mode == "🔍 查单词 (Dictionary)":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; font-family:Patrick Hand; color:#8D6E63;'>今天的特色菜是什么？</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; font-family:Patrick Hand; color:#8D6E63; margin-bottom:20px;'>今天的特色菜是什么？</p>", unsafe_allow_html=True)
     
-    col_search, col_btn = st.columns([4, 1])
-    with col_search:
-        search_query = st.text_input("输入法语单词...", placeholder="例如: ratatouille").strip()
+    # 🌟 修改点：取消 st.columns 分列，直接显示，让其自动满宽
+    search_query = st.text_input("", placeholder="在此输入法语单词... (例如: chien)").strip()
     
     auto_cn, auto_pos = "", ""
 
@@ -290,6 +246,10 @@ if app_mode == "🔍 查单词 (Dictionary)":
             st.success("✅ 这个词已经在菜单上了！")
             exist_word = match.iloc[0]
             
+            # 播放发音
+            audio = get_audio_bytes(search_query)
+            if audio: st.audio(audio, format='audio/mp3')
+
             st.markdown(f"""
             <div class="menu-card">
                 <div class="french-word">{exist_word['word']}</div>
@@ -341,14 +301,14 @@ if app_mode == "🔍 查单词 (Dictionary)":
                             'interval': 0
                         }
                         st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                        st.balloons() # 庆祝特效
+                        st.balloons()
                         st.toast(f"Bon appétit! {final_word} 已加入。", icon="🍷")
                         st.cache_data.clear()
             else:
                 st.error("食材没找到 (查询失败)，请检查拼写。")
 
 # ==========================================
-# 7. 背单词模式
+# 7. 背单词模式 (代码保持不变)
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
     
@@ -381,19 +341,14 @@ elif app_mode == "📖 背单词 (Review)":
             st.rerun()
             
         current_word_data = st.session_state.df_all.loc[cur_idx]
-
-        # 进度条
         progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
         st.progress(max(0.0, min(1.0, progress)))
         
-        # 自动发音
         audio_bytes = get_audio_bytes(current_word_data['word'])
         if audio_bytes:
             st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
-        # 卡片逻辑
         if not st.session_state.show_back:
-            # === 正面 (菜单) ===
             st.markdown(f"""
             <div class="menu-card">
                 <div style="color:#BCAAA4; font-family:'Patrick Hand'; margin-bottom:10px;">Plat du Jour</div>
@@ -401,12 +356,10 @@ elif app_mode == "📖 背单词 (Review)":
                 <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
             </div>
             """, unsafe_allow_html=True)
-            
             if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
                 st.session_state.show_back = True
                 st.rerun()
         else:
-            # === 背面 (详情) ===
             st.markdown(f"""
             <div class="menu-card">
                 <div class="french-word">{current_word_data['word']}</div>
@@ -415,18 +368,14 @@ elif app_mode == "📖 背单词 (Review)":
                 <div class="word-meaning">{current_word_data['meaning']}</div>
             </div>
             """, unsafe_allow_html=True)
-            
-            # 按钮组
             c1, c2 = st.columns(2)
             with c1:
-                # 记住了：铜锅色按钮
                 if st.button("🍷 Délicieux (记住了)", use_container_width=True, type="primary"):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
                     st.session_state.study_queue.pop(0)
                     st.session_state.show_back = False
                     st.rerun()
             with c2:
-                # 忘了：普通样式
                 if st.button("🧂 Trop Salé (忘了)", use_container_width=True):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
                     st.session_state.study_queue.pop(0)
