@@ -13,14 +13,135 @@ from deep_translator import GoogleTranslator
 # 1. 页面配置
 # ==========================================
 st.set_page_config(
-    page_title="Le Menu du Jour - Lite", 
-    page_icon="🥐",
+    page_title="Le Menu du Jour", 
+    page_icon="🥘",
     layout="centered",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 2. 核心功能函数
+# 2. 🎨 UI/UX 设计 (水彩 + 料理鼠王风格)
+# ==========================================
+st.markdown("""
+<style>
+    /* 引入字体 */
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Patrick+Hand&display=swap');
+
+    /* --- 全局背景：艾特熊的水彩画纸质感 --- */
+    .stApp {
+        background-color: #F9F7F1; /* 暖米色画纸 */
+        background-image: radial-gradient(#F9F7F1 20%, #EFEBE0 100%);
+    }
+
+    /* --- 侧边栏：像一本旧书的侧边 --- */
+    section[data-testid="stSidebar"] {
+        background-color: #F4F0E6;
+        border-right: 1px dashed #D7CCC8;
+    }
+
+    /* --- 标题样式：法式餐厅菜单风格 --- */
+    h1, h2, h3 {
+        font-family: 'Playfair Display', serif !important;
+        color: #3E2723 !important;
+    }
+
+    /* --- 卡片容器：水彩晕染效果 --- */
+    .menu-card {
+        background-color: #FFFEFA;
+        padding: 40px 30px;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        border-radius: 12px;
+        border: 1px solid #E0D6CC; 
+        /* 柔和的阴影，像纸张浮起 */
+        box-shadow: 0 8px 20px rgba(93, 64, 55, 0.06); 
+        text-align: center;
+        position: relative;
+    }
+
+    /* --- 装饰线：料理鼠王风格的双线 --- */
+    .menu-divider {
+        border-top: 3px double #C65D3B; /* 铜锅色 */
+        width: 80px;
+        margin: 20px auto;
+        opacity: 0.6;
+    }
+
+    /* --- 字体系统 --- */
+    .french-word {
+        font-family: 'Playfair Display', serif;
+        font-size: 56px;
+        font-weight: 600;
+        color: #C65D3B; /* 铜红色高亮 */
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+    }
+    
+    .word-meta {
+        font-family: 'Patrick Hand', cursive;
+        font-size: 22px;
+        color: #78909C; /* 艾特熊围巾的灰蓝色 */
+        font-style: italic;
+    }
+
+    .word-meaning {
+        font-family: 'Patrick Hand', cursive;
+        font-size: 30px;
+        color: #5D4037; /* 深褐墨水色 */
+        margin-top: 20px;
+        background-color: #F2EFE9; /* 像贴了一张便利贴 */
+        display: inline-block;
+        padding: 10px 25px;
+        border-radius: 20px 5px 20px 5px; /* 不规则圆角，模拟手绘 */
+    }
+
+    /* --- 按钮美化：料理鼠王的铜锅与精致感 --- */
+    div.stButton > button {
+        background-color: transparent;
+        color: #5D4037;
+        border: 2px solid #8D6E63;
+        border-radius: 30px; /* 圆润 */
+        font-family: 'Playfair Display', serif;
+        font-size: 18px;
+        padding: 10px 25px;
+        transition: 0.3s all ease;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    /* 鼠标悬停：变成铜锅色背景 */
+    div.stButton > button:hover {
+        background-color: #C65D3B; /* 铜红 */
+        color: #FFF;
+        border-color: #C65D3B;
+        box-shadow: 0 5px 15px rgba(198, 93, 59, 0.3);
+        transform: translateY(-2px);
+    }
+
+    /* 主按钮 (Primary) 特殊样式 */
+    div.stButton > button[kind="primary"] {
+        border-color: #C65D3B;
+        color: #C65D3B;
+    }
+
+    /* 输入框样式：融入背景 */
+    .stTextInput input {
+        background-color: #FFFFFF;
+        border: 1px solid #D7CCC8;
+        color: #5D4037;
+        font-family: 'Patrick Hand', cursive;
+        border-radius: 10px;
+    }
+    
+    /* 进度条颜色 */
+    .stProgress > div > div > div > div {
+        background-color: #C65D3B;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 3. 核心功能函数
 # ==========================================
 
 # --- A. 发音功能 ---
@@ -44,40 +165,29 @@ def translate_text(text):
     except Exception:
         return ""
 
-# --- C. 爬虫功能 (只抓词性，不再抓长长的例句) ---
-@st.cache_data(show_spinner="正在查询词性...")
+# --- C. 爬虫功能 (只抓词性) ---
+@st.cache_data(show_spinner="正在查阅主厨的食谱 (Wiktionary)...")
 def get_wiktionary_pos(word):
-    """
-    只抓取词性 (Part of Speech)
-    """
     word = word.strip().lower()
     url = f"https://fr.wiktionary.org/wiki/{word}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    
     pos = "未知"      
-    
     try:
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # 1. 精准抓取性别
             fr_section = soup.find(id="Français")
             if fr_section:
                 parent = fr_section.find_parent()
-                # 寻找包含性别的行
                 gender_line = parent.find_next('span', class_='ligne-de-forme')
                 
                 if gender_line:
                     text = gender_line.get_text().lower()
-                    if 'masculin' in text or ' m' in text:
-                        pos = "m. (阳性)"
-                    elif 'féminin' in text or ' f' in text:
-                        pos = "f. (阴性)"
+                    if 'masculin' in text or ' m' in text: pos = "m. (阳性)"
+                    elif 'féminin' in text or ' f' in text: pos = "f. (阴性)"
                 
-                # 如果没找到，尝试在标题找
                 if pos == "未知":
                     all_pos_headers = soup.find_all('span', class_='titredef')
                     for header in all_pos_headers:
@@ -98,9 +208,7 @@ def get_wiktionary_pos(word):
                         elif 'adjectif' in header.get_text().lower():
                             pos = "adj. (形容词)"
                             break
-            
         return pos
-
     except Exception:
         return "未知"
 
@@ -119,9 +227,8 @@ def update_word_progress(word_row, quality):
     return word_row
 
 # ==========================================
-# 3. 数据加载
+# 4. 数据加载
 # ==========================================
-# 虽然我们不显示example了，但为了兼容CSV文件格式，我们还是保留这个列，只是填空
 REQUIRED_COLS = ['word', 'meaning', 'gender', 'example'] 
 SRS_COLS = ['last_review', 'next_review', 'interval']
 
@@ -132,7 +239,6 @@ def load_data():
         for col in SRS_COLS:
             if col not in df.columns:
                 df[col] = None if col == 'last_review' else 0
-        
         if 'next_review' in df.columns:
             df['next_review'] = pd.to_datetime(df['next_review'], errors='coerce')
             df['next_review'] = df['next_review'].dt.strftime('%Y-%m-%d')
@@ -147,17 +253,17 @@ if 'df_all' not in st.session_state:
 df = st.session_state.df_all
 
 # ==========================================
-# 4. 侧边栏
+# 5. 侧边栏
 # ==========================================
 with st.sidebar:
-    st.title("🇫🇷 Menu Français")
+    st.markdown("<h1 style='font-size:24px; color:#5D4037;'>🧑‍🍳 Chef's Kitchen</h1>", unsafe_allow_html=True)
     
     app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
     st.divider()
     
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
-        label="📥 下载最新 vocab.csv",
+        label="📥 打包带走 (下载 CSV)",
         data=csv_buffer,
         file_name="vocab.csv",
         mime="text/csv",
@@ -165,74 +271,56 @@ with st.sidebar:
     )
 
 # ==========================================
-# 5. 查单词模式 (极简版)
+# 6. 查单词模式
 # ==========================================
 if app_mode == "🔍 查单词 (Dictionary)":
     
-    # CSS 优化：让标题更好看
-    st.markdown("""
-    <style>
-        .dict-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 40px;
-            color: #3E2723;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .dict-meaning {
-            font-family: 'Patrick Hand', sans-serif;
-            font-size: 24px;
-            color: #5D4037;
-            text-align: center;
-            background-color: #F5F5F5;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 10px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.header("🔍 Dictionnaire Lite")
+    st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; font-family:Patrick Hand; color:#8D6E63;'>今天的特色菜是什么？</p>", unsafe_allow_html=True)
     
     col_search, col_btn = st.columns([4, 1])
     with col_search:
-        search_query = st.text_input("输入法语单词:", placeholder="例如: chat").strip()
+        search_query = st.text_input("输入法语单词...", placeholder="例如: ratatouille").strip()
     
     auto_cn, auto_pos = "", ""
 
     if search_query:
-        # 查重
         match = df[df['word'].str.lower() == search_query.lower()]
         if not match.empty:
-            st.success("✅ 单词已存在！")
+            st.success("✅ 这个词已经在菜单上了！")
             exist_word = match.iloc[0]
-            # 显示存在的单词卡片
-            st.markdown(f"<div class='dict-title'>{exist_word['word']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:center; color:#999; margin-top:-20px; margin-bottom:20px;'>{exist_word['gender']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='dict-meaning'>{exist_word['meaning']}</div>", unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="menu-card">
+                <div class="french-word">{exist_word['word']}</div>
+                <div class="word-meta">{exist_word['gender']}</div>
+                <div class="menu-divider"></div>
+                <div class="word-meaning">{exist_word['meaning']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
         else:
-            # 联网查询
-            with st.spinner("🔍 正在查询..."):
+            with st.spinner("🍳 正在烹饪中..."):
                 auto_cn = translate_text(search_query)
                 auto_pos = get_wiktionary_pos(search_query)
 
             if auto_cn:
-                # === 优化后的显示界面 ===
-                # 不再显示 "FR chat"，直接显示优雅的大字
-                st.markdown(f"<div class='dict-title'>{search_query}</div>", unsafe_allow_html=True)
-                
-                # 发音
+                # 播放发音
                 audio = get_audio_bytes(search_query)
                 if audio: st.audio(audio, format='audio/mp3')
 
-                # 信息卡片
-                st.markdown(f"<div style='text-align:center; color:#78909C; margin-bottom: 10px;'>{auto_pos}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='dict-meaning'>{auto_cn}</div>", unsafe_allow_html=True)
+                # 展示卡片
+                st.markdown(f"""
+                <div class="menu-card">
+                    <div class="french-word">{search_query}</div>
+                    <div class="word-meta">{auto_pos}</div>
+                    <div class="menu-divider"></div>
+                    <div class="word-meaning">{auto_cn}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                st.divider()
-                st.caption("📝 确认并保存")
+                st.caption("📝 加入今日菜单")
                 
-                # 极简表单：没有例句了
                 with st.form("add_word_form"):
                     col_a, col_b = st.columns([1, 2])
                     with col_a:
@@ -240,27 +328,27 @@ if app_mode == "🔍 查单词 (Dictionary)":
                     with col_b:
                         final_meaning = st.text_input("中文意思", value=auto_cn)
                     
-                    # 隐藏的 Word 字段
                     final_word = search_query 
                     
-                    if st.form_submit_button("➕ 加入记忆列表", type="primary"):
+                    if st.form_submit_button("🍽️ 上菜 (Ajouter)", type="primary"):
                         new_row = {
                             'word': final_word,
                             'meaning': final_meaning,
                             'gender': final_gender,
-                            'example': "", # 留空
+                            'example': "", 
                             'last_review': None,
                             'next_review': date.today().isoformat(),
                             'interval': 0
                         }
                         st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                        st.toast(f"已保存: {final_word}", icon="🎉")
+                        st.balloons() # 庆祝特效
+                        st.toast(f"Bon appétit! {final_word} 已加入。", icon="🍷")
                         st.cache_data.clear()
             else:
-                st.error("查询失败 (可能是网络原因)，请稍后再试。")
+                st.error("食材没找到 (查询失败)，请检查拼写。")
 
 # ==========================================
-# 6. 背单词模式 (无例句版)
+# 7. 背单词模式
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
     
@@ -279,11 +367,11 @@ elif app_mode == "📖 背单词 (Review)":
         st.session_state.show_back = False
 
     if not st.session_state.study_queue:
-        st.balloons()
         st.markdown("""
         <div style="text-align:center; padding: 50px;">
-            <h1>🎉 Félicitations!</h1>
-            <p>今日任务已完成！</p>
+            <div style="font-size: 60px;">🍷</div>
+            <h1 style="color:#C65D3B;">C'est fini!</h1>
+            <p style="font-family:'Patrick Hand'; font-size:20px; color:#5D4037;">今日的品鉴课程已结束。</p>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -294,62 +382,55 @@ elif app_mode == "📖 背单词 (Review)":
             
         current_word_data = st.session_state.df_all.loc[cur_idx]
 
+        # 进度条
         progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
         st.progress(max(0.0, min(1.0, progress)))
         
-        # 样式优化：去掉了例句的CSS
-        st.markdown("""
-        <style>
-            .flash-card {
-                background-color: white; padding: 40px; border-radius: 12px;
-                border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                text-align: center; margin-bottom: 20px;
-            }
-            .word-title { font-size: 52px; color: #2c3e50; font-family: 'Playfair Display', serif; margin-bottom: 10px; }
-            .word-meaning { font-size: 28px; color: #e67e22; font-family: 'Patrick Hand', sans-serif; }
-            .word-meta { color: #95a5a6; font-size: 20px; font-family: 'Patrick Hand', sans-serif;}
-        </style>
-        """, unsafe_allow_html=True)
-
+        # 自动发音
         audio_bytes = get_audio_bytes(current_word_data['word'])
         if audio_bytes:
             st.audio(audio_bytes, format='audio/mp3', autoplay=True)
 
+        # 卡片逻辑
         if not st.session_state.show_back:
-            # 正面
+            # === 正面 (菜单) ===
             st.markdown(f"""
-            <div class="flash-card">
-                <div style="color:#ccc; margin-bottom:10px;">点击下方按钮翻牌</div>
-                <div class="word-title">{current_word_data['word']}</div>
-                <br>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🔍 查看答案", use_container_width=True):
-                st.session_state.show_back = True
-                st.rerun()
-        else:
-            # 背面：去掉了例句部分，只保留单词、词性和意思
-            st.markdown(f"""
-            <div class="flash-card">
-                <div class="word-title">{current_word_data['word']}</div>
-                <div class="word-meta">{current_word_data.get('gender', '')}</div>
-                <hr style="opacity:0.2; margin: 20px 0;">
-                <div class="word-meaning">“ {current_word_data['meaning']} ”</div>
+            <div class="menu-card">
+                <div style="color:#BCAAA4; font-family:'Patrick Hand'; margin-bottom:10px;">Plat du Jour</div>
+                <div class="french-word">{current_word_data['word']}</div>
+                <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
             </div>
             """, unsafe_allow_html=True)
             
+            if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
+                st.session_state.show_back = True
+                st.rerun()
+        else:
+            # === 背面 (详情) ===
+            st.markdown(f"""
+            <div class="menu-card">
+                <div class="french-word">{current_word_data['word']}</div>
+                <div class="word-meta">{current_word_data.get('gender', '')}</div>
+                <div class="menu-divider"></div>
+                <div class="word-meaning">{current_word_data['meaning']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 按钮组
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("✅ 认识", use_container_width=True, type="primary"):
+                # 记住了：铜锅色按钮
+                if st.button("🍷 Délicieux (记住了)", use_container_width=True, type="primary"):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
                     st.session_state.study_queue.pop(0)
                     st.session_state.show_back = False
                     st.rerun()
             with c2:
-                if st.button("❌ 模糊", use_container_width=True):
+                # 忘了：普通样式
+                if st.button("🧂 Trop Salé (忘了)", use_container_width=True):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
                     st.session_state.study_queue.pop(0)
                     st.session_state.show_back = False
                     st.rerun()
 
-st.markdown("<br><div style='text-align:center; color:#ddd;'>Powered by Python</div>", unsafe_allow_html=True)
+st.markdown("<br><div style='text-align:center; color:#D7CCC8; font-family:Patrick Hand;'>Fait avec amour par Python</div>", unsafe_allow_html=True)
