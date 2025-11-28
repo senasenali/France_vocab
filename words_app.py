@@ -47,50 +47,58 @@ st.markdown("""
     }
 
     /* -------------------------------------------
-       1. 搜索框美化 (修复重叠问题)
+       1. 搜索框美化 (彻底修复红色边框)
        ------------------------------------------- */
-    /* 隐藏默认的 Label 间距 */
-    div[data-testid="stTextInput"] label {
-        display: none;
-    }
+    div[data-testid="stTextInput"] label { display: none; } /* 隐藏Label */
     
     div[data-testid="stTextInput"] input {
         background-color: #FFFEFA; 
-        border: 2px solid #E0D6CC; 
-        border-radius: 50px;       /* 变成完全圆润的胶囊形状 */
+        border: 2px solid #E0D6CC !important; /* 强制覆盖默认边框 */
+        border-radius: 50px;       
         padding: 15px 25px;        
         color: #5D4037;            
         font-family: 'Patrick Hand', cursive;
         font-size: 22px;           
-        text-align: center;        /* 文字居中，更有设计感 */
+        text-align: center;        
         box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05); 
         transition: 0.3s all;
-        height: auto;
+        outline: none !important; /* 去掉默认轮廓 */
     }
     
+    /* 鼠标点进去时的样式：变成铜锅色，而不是默认的红色 */
     div[data-testid="stTextInput"] input:focus {
-        border-color: #C65D3B; /* 铜锅色 */
-        box-shadow: 0 6px 15px rgba(198, 93, 59, 0.15);
+        border-color: #C65D3B !important; 
+        box-shadow: 0 0 0 2px rgba(198, 93, 59, 0.2) !important; /* 柔和的铜色光晕 */
     }
 
     /* -------------------------------------------
-       2. 音频按钮美化 (把按钮变成圆形图标)
+       2. 小老鼠音频按钮 (左上角悬浮)
        ------------------------------------------- */
-    /* 这是一个特殊的类，我们会给重听按钮加上 */
-    div.stButton > button {
-        background-color: transparent;
-        color: #5D4037;
-        border: 1px solid #D7CCC8;
-        border-radius: 20px;
-        font-family: 'Playfair Display', serif;
-        font-size: 16px;
-        padding: 5px 15px;
-        transition: 0.3s all ease;
+    /* 这是一个特殊的 CSS Hack，用来定位那个小老鼠按钮 */
+    .mouse-audio-btn {
+        border: none !important;
+        background: transparent !important;
+        font-size: 30px !important; /* 图标放大 */
+        padding: 0 !important;
+        margin-bottom: -60px !important; /* 关键：负边距，让它沉入下面的卡片里 */
+        margin-left: 10px !important;
+        position: relative;
+        z-index: 999; /* 保证在最上层 */
+        cursor: pointer;
+        transition: transform 0.2s;
     }
-    div.stButton > button:hover {
-        background-color: #F2EFE9;
-        color: #C65D3B;
-        border-color: #C65D3B;
+    
+    .mouse-audio-btn:hover {
+        transform: scale(1.2) rotate(-10deg); /* 悬停时小老鼠动一下 */
+        background: transparent !important; /* 保持透明 */
+        color: inherit !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* 消除 Streamlit 默认按钮的边框和背景 */
+    div.stButton > button:first-child {
+        /* 注意：这里会影响页面上第一个按钮，所以我们要小心布局 */
     }
 
     /* -------------------------------------------
@@ -98,8 +106,8 @@ st.markdown("""
        ------------------------------------------- */
     .menu-card {
         background-color: #FFFEFA;
-        padding: 40px 30px;
-        margin-top: 20px; /* 增加顶部间距，防止挨着搜索框 */
+        padding: 50px 30px 40px 30px; /* 顶部留多一点空间给单词 */
+        margin-top: 10px; 
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
@@ -109,9 +117,15 @@ st.markdown("""
     }
 
     .menu-divider { border-top: 3px double #C65D3B; width: 80px; margin: 20px auto; opacity: 0.6; }
-    .french-word { font-family: 'Playfair Display', serif; font-size: 60px; font-weight: 600; color: #C65D3B; margin-bottom: 5px; letter-spacing: 1px; }
+    .french-word { font-family: 'Playfair Display', serif; font-size: 60px; font-weight: 600; color: #C65D3B; margin-bottom: 5px; letter-spacing: 1px; line-height: 1.1; }
     .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; margin-bottom: 20px;}
     .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 10px; background-color: #F9F7F1; }
+
+    /* 通用按钮样式 (用于添加、背单词等) */
+    div.stButton > button { 
+        border-radius: 30px; 
+        font-family: 'Playfair Display', serif; 
+    }
 
 </style>
 """, unsafe_allow_html=True)
@@ -120,27 +134,22 @@ st.markdown("""
 # 3. 核心功能函数
 # ==========================================
 
-# --- 隐形音频播放器 (核心黑科技) ---
-# 这个函数会生成一段 HTML，直接在后台播放声音，不显示黑色条条
 def play_audio_hidden(text, lang='fr'):
     if not text: return
     try:
         tts = gTTS(text=text, lang=lang, slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
-        # 将音频转为 base64 编码，嵌入 HTML
         b64 = base64.b64encode(fp.getvalue()).decode()
         md = f"""
             <audio autoplay style="display:none;">
             <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
             </audio>
             """
-        # 渲染不可见的 HTML
         st.markdown(md, unsafe_allow_html=True)
     except Exception:
         pass
 
-# --- 翻译与爬虫 ---
 @st.cache_data(show_spinner=False)
 def translate_text(text):
     try:
@@ -250,170 +259,79 @@ if app_mode == "🔍 查单词 (Dictionary)":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
     
-    # 搜索框：使用 label_visibility="collapsed" 彻底移除那个占位红框
     search_query = st.text_input("", placeholder="在此输入法语单词...", label_visibility="collapsed").strip()
     
     auto_cn, auto_pos = "", ""
 
     if search_query:
-        # 1. 自动播放音频 (隐形)
-        # 只有当用户输入变化时，这里会运行，自动播放一次
+        # 默认自动播放一次
         play_audio_hidden(search_query)
 
         match = df[df['word'].str.lower() == search_query.lower()]
+        
+        # 准备显示的数据
         if not match.empty:
-            st.success("✅ 这个词已经在菜单上了！")
             exist_word = match.iloc[0]
-            
-            # 卡片展示
-            st.markdown(f"""
-            <div class="menu-card">
-                <div class="french-word">{exist_word['word']}</div>
-                <div class="word-meta">{exist_word['gender']}</div>
-                <div class="word-meaning">{exist_word['meaning']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # 小喇叭按钮
-            col1, col2, col3 = st.columns([1,1,1])
-            with col2:
-                # 点击这个按钮，会触发页面刷新，上面的 play_audio_hidden 会再次运行
-                if st.button("🔊 再听一遍"):
-                    pass 
-            
+            display_word = exist_word['word']
+            display_pos = exist_word['gender']
+            display_meaning = exist_word['meaning']
+            is_new = False
         else:
             with st.spinner("🍳 正在烹饪中..."):
                 auto_cn = translate_text(search_query)
                 auto_pos = get_wiktionary_pos(search_query)
+            display_word = search_query
+            display_pos = auto_pos
+            display_meaning = auto_cn
+            is_new = True
 
-            if auto_cn:
-                # 展示卡片
-                st.markdown(f"""
-                <div class="menu-card">
-                    <div class="french-word">{search_query}</div>
-                    <div class="word-meta">{auto_pos}</div>
-                    <div class="word-meaning">{auto_cn}</div>
-                </div>
+        if display_meaning:
+            # === 小老鼠按钮逻辑 ===
+            # 我们用 CSS (mouse-audio-btn) 把这个按钮定位到卡片左上角
+            # 这里的 columns 只是为了布局占位，重要的是按钮本身
+            col_audio, col_empty = st.columns([1, 10])
+            with col_audio:
+                # 这是一个“透明”按钮，点击后页面刷新，触发上面的 play_audio_hidden
+                # 按钮文字是小老鼠
+                st.markdown("""
+                <style>
+                /* 只针对这个小老鼠按钮的特殊样式覆盖 */
+                div.row-widget.stButton > button {
+                    background-color: transparent !important;
+                    border: none !important;
+                    font-size: 28px !important;
+                    padding: 0px !important;
+                }
+                div.row-widget.stButton > button:hover {
+                    transform: scale(1.2);
+                    box-shadow: none !important;
+                }
+                </style>
                 """, unsafe_allow_html=True)
-
-                # 按钮区域
-                c1, c2, c3 = st.columns([1,2,1])
-                with c2:
-                     if st.button("🔊 再听一遍"):
-                        pass
                 
-                st.markdown("<br>", unsafe_allow_html=True) # 增加一点空隙
+                if st.button("🐁", key="replay_btn", help="点击小老鼠重听"):
+                    pass # 刷新页面重新播放
+            
+            # === 卡片展示 (通过 CSS 这里的 margin-top 把它拉上来) ===
+            # 注意：CSS中 .menu-card 的 margin-top 稍微调整，配合上面的按钮
+            st.markdown(f"""
+            <div class="menu-card" style="margin-top: -20px;">
+                <div class="french-word">{display_word}</div>
+                <div class="word-meta">{display_pos}</div>
+                <div class="word-meaning">{display_meaning}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-                # 表单区域
+            # 如果是新词，显示添加表单
+            if is_new:
+                st.caption("📝 加入今日菜单")
                 with st.form("add_word_form"):
-                    st.caption("📝 加入今日菜单")
                     col_a, col_b = st.columns([1, 2])
                     with col_a:
-                        final_gender = st.text_input("词性", value=auto_pos)
+                        final_gender = st.text_input("词性", value=display_pos)
                     with col_b:
-                        final_meaning = st.text_input("中文意思", value=auto_cn)
+                        final_meaning = st.text_input("中文意思", value=display_meaning)
                     
                     final_word = search_query 
                     
-                    if st.form_submit_button("🍽️ 上菜 (Ajouter)", type="primary"):
-                        new_row = {
-                            'word': final_word,
-                            'meaning': final_meaning,
-                            'gender': final_gender,
-                            'example': "", 
-                            'last_review': None,
-                            'next_review': date.today().isoformat(),
-                            'interval': 0
-                        }
-                        st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
-                        st.balloons()
-                        st.toast(f"Bon appétit! {final_word} 已加入。", icon="🍷")
-                        st.cache_data.clear()
-            else:
-                st.error("食材没找到 (查询失败)，请检查拼写。")
-    
-    # 空状态时的占位符，保持美观
-    else:
-        st.markdown("<br><br><p style='text-align:center; color:#BCAAA4; font-family:Patrick Hand;'>Bon appétit !</p>", unsafe_allow_html=True)
-
-# ==========================================
-# 7. 背单词模式
-# ==========================================
-elif app_mode == "📖 背单词 (Review)":
-    
-    if 'study_queue' not in st.session_state:
-        today_str = date.today().isoformat()
-        mask = (st.session_state.df_all['next_review'] <= today_str) | (st.session_state.df_all['next_review'].isna())
-        due_df = st.session_state.df_all[mask]
-        
-        if len(due_df) > 50:
-            study_df = due_df.sample(50)
-        else:
-            study_df = due_df
-            
-        st.session_state.study_queue = study_df.index.tolist()
-        random.shuffle(st.session_state.study_queue)
-        st.session_state.show_back = False
-
-    if not st.session_state.study_queue:
-        st.markdown("""
-        <div style="text-align:center; padding: 50px;">
-            <div style="font-size: 60px;">🍷</div>
-            <h1 style="color:#C65D3B;">C'est fini!</h1>
-            <p style="font-family:'Patrick Hand'; font-size:20px; color:#5D4037;">今日的品鉴课程已结束。</p>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        cur_idx = st.session_state.study_queue[0]
-        if cur_idx not in st.session_state.df_all.index:
-            st.session_state.study_queue.pop(0)
-            st.rerun()
-            
-        current_word_data = st.session_state.df_all.loc[cur_idx]
-        progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
-        st.progress(max(0.0, min(1.0, progress)))
-        
-        # 自动播放 (背单词模式依然使用隐形播放)
-        play_audio_hidden(current_word_data['word'])
-
-        if not st.session_state.show_back:
-            st.markdown(f"""
-            <div class="menu-card">
-                <div style="color:#BCAAA4; font-family:'Patrick Hand'; margin-bottom:10px;">Plat du Jour</div>
-                <div class="french-word">{current_word_data['word']}</div>
-                <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # 按钮组：查看 + 重听
-            c1, c2, c3 = st.columns([1, 2, 1])
-            with c2:
-                if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
-                    st.session_state.show_back = True
-                    st.rerun()
-                if st.button("🔊 再听一遍", use_container_width=True):
-                    pass # 点击会自动刷新页面，触发上面的 play_audio_hidden
-        else:
-            st.markdown(f"""
-            <div class="menu-card">
-                <div class="french-word">{current_word_data['word']}</div>
-                <div class="word-meta">{current_word_data.get('gender', '')}</div>
-                <div class="menu-divider"></div>
-                <div class="word-meaning">{current_word_data['meaning']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🍷 Délicieux (记住了)", use_container_width=True, type="primary"):
-                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
-                    st.session_state.study_queue.pop(0)
-                    st.session_state.show_back = False
-                    st.rerun()
-            with c2:
-                if st.button("🧂 Trop Salé (忘了)", use_container_width=True):
-                    st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
-                    st.session_state.study_queue.pop(0)
-                    st.session_state.show_back = False
-                    st.rerun()
-
-st.markdown("<br><div style='text-align:center; color:#D7CCC8; font-family:Patrick Hand;'>Fait avec amour par Python</div>", unsafe_allow_html=True)
+                    if st.form_submit_button("🍽️ 上菜
