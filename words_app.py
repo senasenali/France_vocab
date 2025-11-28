@@ -27,6 +27,7 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Patrick+Hand&display=swap');
 
+    /* 全局背景 */
     .stApp {
         background-color: #F9F7F1; 
         background-image: radial-gradient(#F9F7F1 20%, #EFEBE0 100%);
@@ -42,46 +43,77 @@ st.markdown("""
         color: #3E2723 !important;
     }
 
-    /* --- 输入框美化 --- */
+    /* ============================================================
+       🛑 核心修复：彻底消灭灰色框和红色细线
+       ============================================================ */
+    
+    /* 1. 隐藏输入框上方的 Label */
     div[data-testid="stTextInput"] label { display: none; }
-    
-    div[data-testid="stTextInput"] input {
-        background-color: #FFFEFA; 
-        border: 2px solid #E0D6CC !important;
-        border-radius: 50px;       
-        padding: 15px 25px;        
-        color: #5D4037;            
-        font-family: 'Patrick Hand', cursive;
-        font-size: 22px;           
-        text-align: center;        
-        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05); 
-        transition: 0.3s all;
-        outline: none !important;
-    }
-    
-    div[data-testid="stTextInput"] input:focus {
-        border-color: #C65D3B !important; 
-        box-shadow: 0 0 0 2px rgba(198, 93, 59, 0.2) !important;
+
+    /* 2. 针对 Streamlit 输入框容器的强力覆盖 */
+    div[data-testid="stTextInput"] > div > div {
+        background-color: #FFFEFA !important;
+        border: 2px solid #E0D6CC !important; /* 默认边框 */
+        border-radius: 50px !important;
+        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05) !important; /* 自定义阴影 */
     }
 
-    /* --- 小老鼠按钮样式 --- */
-    div.row-widget.stButton > button {
-        background-color: transparent;
-        border: none;
-        color: #5D4037;
+    /* 3. 鼠标点进去时的状态 (Focus) */
+    div[data-testid="stTextInput"] > div > div:focus-within {
+        border-color: #C65D3B !important; /* 铜锅色 */
+        box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.2) !important; /* 铜色光晕 */
     }
 
-    /* --- 卡片样式 --- */
+    /* 4. 输入框内部文字样式 */
+    input[type="text"] {
+        color: #5D4037 !important;
+        font-family: 'Patrick Hand', cursive !important;
+        font-size: 22px !important;
+        text-align: center !important;
+        background-color: transparent !important;
+    }
+
+    /* ============================================================
+       🐭 小老鼠按钮样式 (右上角)
+       ============================================================ */
+    /* 这是一个专门给小老鼠按钮定义的样式，把它变成透明的大图标 */
+    div[data-testid="column"] button {
+        background-color: transparent !important;
+        border: none !important;
+        font-size: 32px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        line-height: 1 !important;
+        transition: transform 0.2s !important;
+    }
+    
+    div[data-testid="column"] button:hover {
+        transform: scale(1.2) rotate(15deg) !important; /* 悬停时摇晃一下 */
+        color: inherit !important;
+        box-shadow: none !important;
+    }
+    
+    /* 消除按钮点击时的红色边框 */
+    div[data-testid="column"] button:focus {
+        border: none !important;
+        box-shadow: none !important;
+        color: inherit !important;
+    }
+
+    /* ============================================================
+       📋 卡片容器
+       ============================================================ */
     .menu-card {
         background-color: #FFFEFA;
         padding: 50px 30px 40px 30px;
-        margin-top: 10px; 
+        margin-top: -30px; /* 关键：负边距，让卡片往上提，接住上面的小老鼠 */
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
         box-shadow: 0 8px 20px rgba(93, 64, 55, 0.06); 
         text-align: center;
         position: relative;
+        z-index: 1; /* 保证卡片在下层 */
     }
 
     .menu-divider { border-top: 3px double #C65D3B; width: 80px; margin: 20px auto; opacity: 0.6; }
@@ -89,7 +121,7 @@ st.markdown("""
     .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; margin-bottom: 20px;}
     .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 10px; background-color: #F9F7F1; }
 
-    /* 通用按钮 (添加/记住了等) */
+    /* 通用操作按钮 (添加/记住了) */
     div.stButton > button { 
         border-radius: 30px; 
         font-family: 'Playfair Display', serif; 
@@ -237,7 +269,6 @@ if app_mode == "🔍 查单词 (Dictionary)":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
     
-    # 搜索框
     search_query = st.text_input("", placeholder="在此输入法语单词...", label_visibility="collapsed").strip()
     
     auto_cn, auto_pos = "", ""
@@ -265,32 +296,17 @@ if app_mode == "🔍 查单词 (Dictionary)":
             is_new = True
 
         if display_meaning:
-            # === 小老鼠按钮区域 (左上角) ===
-            col_audio, col_empty = st.columns([1, 10])
+            # === 小老鼠按钮区域 (右上角布局) ===
+            # columns([8, 1]) 表示左边占8份空位，右边占1份放老鼠
+            col_empty, col_audio = st.columns([8, 1])
             with col_audio:
-                # 注入特殊CSS让按钮变大
-                st.markdown("""
-                <style>
-                div[data-testid="column"] button {
-                    font-size: 30px !important;
-                    padding: 0px !important;
-                    border: none !important;
-                    background: transparent !important;
-                }
-                div[data-testid="column"] button:hover {
-                    transform: scale(1.2) rotate(-10deg);
-                    color: inherit !important;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
                 if st.button("🐁", key="replay_dict", help="重听"):
                     pass # 点击刷新页面重播
 
             # === 卡片展示 ===
-            # margin-top负值让卡片上移，靠近小老鼠
+            # margin-top负值让卡片上移，形成重叠效果
             st.markdown(f"""
-            <div class="menu-card" style="margin-top: -20px;">
+            <div class="menu-card">
                 <div class="french-word">{display_word}</div>
                 <div class="word-meta">{display_pos}</div>
                 <div class="word-meaning">{display_meaning}</div>
@@ -308,7 +324,6 @@ if app_mode == "🔍 查单词 (Dictionary)":
                     
                     final_word = search_query 
                     
-                    # 修复点：确保字符串闭合
                     if st.form_submit_button("🍽️ 上菜 (Ajouter)", type="primary"):
                         new_row = {
                             'word': final_word,
@@ -371,28 +386,15 @@ elif app_mode == "📖 背单词 (Review)":
         
         play_audio_hidden(current_word_data['word'])
 
-        # === 小老鼠按钮 ===
-        col_audio, col_empty = st.columns([1, 10])
+        # === 小老鼠按钮 (右上角) ===
+        col_empty, col_audio = st.columns([8, 1])
         with col_audio:
-            st.markdown("""
-            <style>
-            div[data-testid="column"] button {
-                font-size: 30px !important;
-                padding: 0px !important;
-                border: none !important;
-                background: transparent !important;
-            }
-            div[data-testid="column"] button:hover {
-                transform: scale(1.2) rotate(-10deg);
-            }
-            </style>
-            """, unsafe_allow_html=True)
             if st.button("🐁", key="replay_review", help="重听"):
                 pass
 
         if not st.session_state.show_back:
             st.markdown(f"""
-            <div class="menu-card" style="margin-top:-20px;">
+            <div class="menu-card">
                 <div style="color:#BCAAA4; font-family:'Patrick Hand'; margin-bottom:10px;">Plat du Jour</div>
                 <div class="french-word">{current_word_data['word']}</div>
                 <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
@@ -403,7 +405,7 @@ elif app_mode == "📖 背单词 (Review)":
                 st.rerun()
         else:
             st.markdown(f"""
-            <div class="menu-card" style="margin-top:-20px;">
+            <div class="menu-card">
                 <div class="french-word">{current_word_data['word']}</div>
                 <div class="word-meta">{current_word_data.get('gender', '')}</div>
                 <div class="menu-divider"></div>
