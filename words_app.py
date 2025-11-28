@@ -4,6 +4,7 @@ import datetime
 from datetime import date, timedelta
 import random
 import io
+import base64
 import requests
 from bs4 import BeautifulSoup
 from gtts import gTTS
@@ -46,48 +47,59 @@ st.markdown("""
     }
 
     /* -------------------------------------------
-       核心修改：让输入框、音频、卡片看起来像一套的
+       1. 搜索框美化 (修复重叠问题)
        ------------------------------------------- */
+    /* 隐藏默认的 Label 间距 */
+    div[data-testid="stTextInput"] label {
+        display: none;
+    }
     
-    /* 1. 输入框美化：模仿卡片风格 */
-    div[data-testid="stTextInput"] {
-        margin-top: 10px;
-        margin-bottom: 10px;
-    }
     div[data-testid="stTextInput"] input {
-        background-color: #FFFEFA; /* 卡片同款米色 */
-        border: 1px solid #E0D6CC; /* 卡片同款边框 */
-        border-radius: 12px;       /* 卡片同款圆角 */
-        padding: 12px 20px;        /* 增加内边距，更舒适 */
-        color: #5D4037;            /* 深褐色文字 */
+        background-color: #FFFEFA; 
+        border: 2px solid #E0D6CC; 
+        border-radius: 50px;       /* 变成完全圆润的胶囊形状 */
+        padding: 15px 25px;        
+        color: #5D4037;            
         font-family: 'Patrick Hand', cursive;
-        font-size: 20px;           /* 字号加大 */
-        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05); /* 柔和阴影 */
+        font-size: 22px;           
+        text-align: center;        /* 文字居中，更有设计感 */
+        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05); 
         transition: 0.3s all;
+        height: auto;
     }
-    /* 鼠标点进去时 */
+    
     div[data-testid="stTextInput"] input:focus {
-        border-color: #C65D3B; /* 铜锅色高亮 */
+        border-color: #C65D3B; /* 铜锅色 */
         box-shadow: 0 6px 15px rgba(198, 93, 59, 0.15);
     }
 
-    /* 2. 音频播放器美化：对齐宽度 */
-    .stAudio {
-        width: 100% !important; /* 强制满宽 */
-        margin-top: 10px;
-        margin-bottom: 20px;
-        border-radius: 12px;
-        overflow: hidden; /* 防止圆角溢出 */
-        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05);
-        border: 1px solid #E0D6CC;
-        background-color: #FFFEFA; /* 给播放器加个底色框 */
+    /* -------------------------------------------
+       2. 音频按钮美化 (把按钮变成圆形图标)
+       ------------------------------------------- */
+    /* 这是一个特殊的类，我们会给重听按钮加上 */
+    div.stButton > button {
+        background-color: transparent;
+        color: #5D4037;
+        border: 1px solid #D7CCC8;
+        border-radius: 20px;
+        font-family: 'Playfair Display', serif;
+        font-size: 16px;
+        padding: 5px 15px;
+        transition: 0.3s all ease;
+    }
+    div.stButton > button:hover {
+        background-color: #F2EFE9;
+        color: #C65D3B;
+        border-color: #C65D3B;
     }
 
-    /* --- 卡片容器 --- */
+    /* -------------------------------------------
+       3. 卡片容器
+       ------------------------------------------- */
     .menu-card {
         background-color: #FFFEFA;
         padding: 40px 30px;
-        margin-top: 10px;
+        margin-top: 20px; /* 增加顶部间距，防止挨着搜索框 */
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
@@ -96,17 +108,10 @@ st.markdown("""
         position: relative;
     }
 
-    /* --- 其他样式保持不变 --- */
     .menu-divider { border-top: 3px double #C65D3B; width: 80px; margin: 20px auto; opacity: 0.6; }
-    .french-word { font-family: 'Playfair Display', serif; font-size: 56px; font-weight: 600; color: #C65D3B; margin-bottom: 10px; letter-spacing: 1px; }
-    .word-meta { font-family: 'Patrick Hand', cursive; font-size: 22px; color: #78909C; font-style: italic; }
-    .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; margin-top: 20px; background-color: #F2EFE9; display: inline-block; padding: 10px 25px; border-radius: 20px 5px 20px 5px; }
-
-    /* 按钮样式 */
-    div.stButton > button { background-color: transparent; color: #5D4037; border: 2px solid #8D6E63; border-radius: 30px; font-family: 'Playfair Display', serif; font-size: 18px; padding: 10px 25px; transition: 0.3s all ease; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    div.stButton > button:hover { background-color: #C65D3B; color: #FFF; border-color: #C65D3B; box-shadow: 0 5px 15px rgba(198, 93, 59, 0.3); transform: translateY(-2px); }
-    div.stButton > button[kind="primary"] { border-color: #C65D3B; color: #C65D3B; }
-    .stProgress > div > div > div > div { background-color: #C65D3B; }
+    .french-word { font-family: 'Playfair Display', serif; font-size: 60px; font-weight: 600; color: #C65D3B; margin-bottom: 5px; letter-spacing: 1px; }
+    .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; margin-bottom: 20px;}
+    .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 10px; background-color: #F9F7F1; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -114,17 +119,28 @@ st.markdown("""
 # ==========================================
 # 3. 核心功能函数
 # ==========================================
-@st.cache_data(show_spinner=False)
-def get_audio_bytes(text, lang='fr'):
-    if not text or text == "Error": return None
+
+# --- 隐形音频播放器 (核心黑科技) ---
+# 这个函数会生成一段 HTML，直接在后台播放声音，不显示黑色条条
+def play_audio_hidden(text, lang='fr'):
+    if not text: return
     try:
         tts = gTTS(text=text, lang=lang, slow=False)
         fp = io.BytesIO()
         tts.write_to_fp(fp)
-        return fp
+        # 将音频转为 base64 编码，嵌入 HTML
+        b64 = base64.b64encode(fp.getvalue()).decode()
+        md = f"""
+            <audio autoplay style="display:none;">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        # 渲染不可见的 HTML
+        st.markdown(md, unsafe_allow_html=True)
     except Exception:
-        return None
+        pass
 
+# --- 翻译与爬虫 ---
 @st.cache_data(show_spinner=False)
 def translate_text(text):
     try:
@@ -233,31 +249,37 @@ with st.sidebar:
 if app_mode == "🔍 查单词 (Dictionary)":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center; font-family:Patrick Hand; color:#8D6E63; margin-bottom:20px;'>今天的特色菜是什么？</p>", unsafe_allow_html=True)
     
-    # 🌟 修改点：取消 st.columns 分列，直接显示，让其自动满宽
-    search_query = st.text_input("", placeholder="在此输入法语单词... (例如: chien)").strip()
+    # 搜索框：使用 label_visibility="collapsed" 彻底移除那个占位红框
+    search_query = st.text_input("", placeholder="在此输入法语单词...", label_visibility="collapsed").strip()
     
     auto_cn, auto_pos = "", ""
 
     if search_query:
+        # 1. 自动播放音频 (隐形)
+        # 只有当用户输入变化时，这里会运行，自动播放一次
+        play_audio_hidden(search_query)
+
         match = df[df['word'].str.lower() == search_query.lower()]
         if not match.empty:
             st.success("✅ 这个词已经在菜单上了！")
             exist_word = match.iloc[0]
             
-            # 播放发音
-            audio = get_audio_bytes(search_query)
-            if audio: st.audio(audio, format='audio/mp3')
-
+            # 卡片展示
             st.markdown(f"""
             <div class="menu-card">
                 <div class="french-word">{exist_word['word']}</div>
                 <div class="word-meta">{exist_word['gender']}</div>
-                <div class="menu-divider"></div>
                 <div class="word-meaning">{exist_word['meaning']}</div>
             </div>
             """, unsafe_allow_html=True)
+
+            # 小喇叭按钮
+            col1, col2, col3 = st.columns([1,1,1])
+            with col2:
+                # 点击这个按钮，会触发页面刷新，上面的 play_audio_hidden 会再次运行
+                if st.button("🔊 再听一遍"):
+                    pass 
             
         else:
             with st.spinner("🍳 正在烹饪中..."):
@@ -265,23 +287,26 @@ if app_mode == "🔍 查单词 (Dictionary)":
                 auto_pos = get_wiktionary_pos(search_query)
 
             if auto_cn:
-                # 播放发音
-                audio = get_audio_bytes(search_query)
-                if audio: st.audio(audio, format='audio/mp3')
-
                 # 展示卡片
                 st.markdown(f"""
                 <div class="menu-card">
                     <div class="french-word">{search_query}</div>
                     <div class="word-meta">{auto_pos}</div>
-                    <div class="menu-divider"></div>
                     <div class="word-meaning">{auto_cn}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                st.caption("📝 加入今日菜单")
+                # 按钮区域
+                c1, c2, c3 = st.columns([1,2,1])
+                with c2:
+                     if st.button("🔊 再听一遍"):
+                        pass
                 
+                st.markdown("<br>", unsafe_allow_html=True) # 增加一点空隙
+
+                # 表单区域
                 with st.form("add_word_form"):
+                    st.caption("📝 加入今日菜单")
                     col_a, col_b = st.columns([1, 2])
                     with col_a:
                         final_gender = st.text_input("词性", value=auto_pos)
@@ -306,9 +331,13 @@ if app_mode == "🔍 查单词 (Dictionary)":
                         st.cache_data.clear()
             else:
                 st.error("食材没找到 (查询失败)，请检查拼写。")
+    
+    # 空状态时的占位符，保持美观
+    else:
+        st.markdown("<br><br><p style='text-align:center; color:#BCAAA4; font-family:Patrick Hand;'>Bon appétit !</p>", unsafe_allow_html=True)
 
 # ==========================================
-# 7. 背单词模式 (代码保持不变)
+# 7. 背单词模式
 # ==========================================
 elif app_mode == "📖 背单词 (Review)":
     
@@ -344,9 +373,8 @@ elif app_mode == "📖 背单词 (Review)":
         progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
         st.progress(max(0.0, min(1.0, progress)))
         
-        audio_bytes = get_audio_bytes(current_word_data['word'])
-        if audio_bytes:
-            st.audio(audio_bytes, format='audio/mp3', autoplay=True)
+        # 自动播放 (背单词模式依然使用隐形播放)
+        play_audio_hidden(current_word_data['word'])
 
         if not st.session_state.show_back:
             st.markdown(f"""
@@ -356,9 +384,15 @@ elif app_mode == "📖 背单词 (Review)":
                 <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
-                st.session_state.show_back = True
-                st.rerun()
+            
+            # 按钮组：查看 + 重听
+            c1, c2, c3 = st.columns([1, 2, 1])
+            with c2:
+                if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
+                    st.session_state.show_back = True
+                    st.rerun()
+                if st.button("🔊 再听一遍", use_container_width=True):
+                    pass # 点击会自动刷新页面，触发上面的 play_audio_hidden
         else:
             st.markdown(f"""
             <div class="menu-card">
