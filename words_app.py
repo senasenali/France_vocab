@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. 🎨 UI/UX 设计 (Ultimate Fix)
+# 2. 🎨 UI/UX 设计 (Ratatouille & Ernest Style)
 # ==========================================
 st.markdown("""
 <style>
@@ -44,77 +44,79 @@ st.markdown("""
     }
 
     /* ============================================================
-       🛑 1. 输入框终极修复 (消灭灰底和红框)
+       🛑 输入框终极修复 (消灭灰底/白底内框)
        ============================================================ */
     
-    /* 隐藏 Label */
+    /* 1. 隐藏 Label */
     div[data-testid="stTextInput"] label { display: none; }
 
-    /* 针对 BaseWeb Input 容器的样式覆盖 */
+    /* 2. 外层容器：米色圆角底 */
     div[data-baseweb="input"] {
-        background-color: #FFFEFA !important; /* 强制米色背景，覆盖灰色 */
-        border: 2px solid #E0D6CC !important; /* 默认浅褐色边框 */
+        background-color: #FFFEFA !important; 
+        border: 2px solid #E0D6CC !important; 
         border-radius: 50px !important;
-        box-shadow: none !important; /* 去掉默认的灰色阴影 */
-        padding: 5px 10px !important;
+        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05) !important; 
+        padding: 8px 15px !important;
     }
 
-    /* 鼠标悬停时 (Hover) - 保持米色，不要变灰 */
+    /* 3. 悬停状态 */
     div[data-baseweb="input"]:hover {
-        border-color: #C65D3B !important; /* 悬停时边框变铜色 */
-        background-color: #FFFEFA !important;
+        border-color: #C65D3B !important; 
     }
 
-    /* 鼠标点击输入时 (Focus) - 强制铜色，去掉默认红色 */
+    /* 4. 聚焦状态 (点击时) */
     div[data-baseweb="input"]:focus-within {
         border-color: #C65D3B !important; 
         background-color: #FFFEFA !important; 
-        box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.15) !important; /* 柔和铜色光晕 */
+        box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.15) !important; 
     }
 
-    /* 输入文字本身 */
+    /* 5. 关键修复：输入文字的内层背景设为透明 */
+    /* 这样就不会出现那个灰色的长方形了 */
+    div[data-baseweb="base-input"] {
+        background-color: transparent !important;
+    }
+    
     input[type="text"] {
+        background-color: transparent !important; /* 强制透明 */
         color: #5D4037 !important;
         font-family: 'Patrick Hand', cursive !important;
         font-size: 24px !important;
         text-align: center !important;
+        caret-color: #C65D3B !important;
     }
 
     /* ============================================================
-       🐭 2. 小老鼠按钮：彻底透明化 (无底色无边框)
+       🐭 小老鼠按钮
        ============================================================ */
-    
-    /* 定位到 column 里的按钮 */
     div[data-testid="column"] button {
-        background-color: transparent !important; /* 关键：透明背景 */
-        border: none !important;                  /* 关键：无边框 */
-        box-shadow: none !important;              /* 关键：无阴影 */
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
         padding: 0 !important;
         font-size: 36px !important;
         line-height: 1 !important;
         overflow: visible !important;
     }
 
-    /* 覆盖所有交互状态 (悬停、点击、聚焦) */
     div[data-testid="column"] button:hover,
     div[data-testid="column"] button:active,
-    div[data-testid="column"] button:focus,
-    div[data-testid="column"] button:focus:not(:active) {
-        background-color: transparent !important; /* 即使点击也不要有背景 */
+    div[data-testid="column"] button:focus {
+        background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
         color: inherit !important;
-        transform: scale(1.15) rotate(10deg) !important; /* 只有动效 */
-        outline: none !important; /* 去掉聚焦时的轮廓线 */
+        transform: scale(1.15) rotate(10deg) !important;
+        outline: none !important;
     }
 
     /* ============================================================
-       📋 3. 卡片容器
+       📋 卡片容器
        ============================================================ */
     .menu-card {
         background-color: #FFFEFA;
         padding: 50px 30px 40px 30px;
-        margin-top: -35px; /* 让卡片上移，接住小老鼠 */
+        margin-top: -35px; 
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
@@ -129,13 +131,12 @@ st.markdown("""
     .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; margin-bottom: 20px;}
     .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 30px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 10px; background-color: #F9F7F1; }
 
-    /* 通用操作按钮 (底部按钮) */
+    /* 底部按钮 */
     div.stButton > button { 
         border-radius: 30px; 
         font-family: 'Playfair Display', serif; 
         border: 1px solid #D7CCC8;
     }
-    /* 排除掉小老鼠按钮，只给下面的按钮加背景动效 */
     div.stButton > button:not(:has(div[data-testid="column"])):hover {
         background-color: #F2EFE9;
     }
@@ -264,11 +265,11 @@ df = st.session_state.df_all
 # ==========================================
 with st.sidebar:
     st.markdown("<h1 style='font-size:24px; color:#5D4037;'>🧑‍🍳 Chef's Kitchen</h1>", unsafe_allow_html=True)
-    app_mode = st.radio("选择模式", ["🔍 查单词 (Dictionary)", "📖 背单词 (Review)"])
+    app_mode = st.radio("选择模式", ["🔍 Dictionary", "📖 Review"])
     st.divider()
     csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
     st.download_button(
-        label="📥 打包带走 (下载 CSV)",
+        label="📥 take away",
         data=csv_buffer,
         file_name="vocab.csv",
         mime="text/csv",
@@ -278,12 +279,12 @@ with st.sidebar:
 # ==========================================
 # 6. 查单词模式
 # ==========================================
-if app_mode == "🔍 查单词 (Dictionary)":
+if app_mode == "🔍 Dictionary":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
     
-    # 搜索框
-    search_query = st.text_input("", placeholder="在此输入法语单词...", label_visibility="collapsed").strip()
+    # 🌟 修改点：删除了 placeholder 里的提示文字
+    search_query = st.text_input("", placeholder="", label_visibility="collapsed").strip()
     
     auto_cn, auto_pos = "", ""
 
@@ -363,7 +364,7 @@ if app_mode == "🔍 查单词 (Dictionary)":
 # ==========================================
 # 7. 背单词模式
 # ==========================================
-elif app_mode == "📖 背单词 (Review)":
+elif app_mode == "📖 Review":
     
     if 'study_queue' not in st.session_state:
         today_str = date.today().isoformat()
@@ -413,7 +414,7 @@ elif app_mode == "📖 背单词 (Review)":
                 <div style="margin-top:30px; color:#D7CCC8;">(点击下方按钮揭晓)</div>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("🔍 揭开餐盘 (Voir)", use_container_width=True):
+            if st.button("🔍 Voir", use_container_width=True):
                 st.session_state.show_back = True
                 st.rerun()
         else:
@@ -427,13 +428,13 @@ elif app_mode == "📖 背单词 (Review)":
             """, unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("🍷 Délicieux (记住了)", use_container_width=True, type="primary"):
+                if st.button("🍷 Délicieux", use_container_width=True, type="primary"):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 1)
                     st.session_state.study_queue.pop(0)
                     st.session_state.show_back = False
                     st.rerun()
             with c2:
-                if st.button("🧂 Trop Salé (忘了)", use_container_width=True):
+                if st.button("🧂 Trop Salé", use_container_width=True):
                     st.session_state.df_all.loc[cur_idx] = update_word_progress(current_word_data.copy(), 0)
                     st.session_state.study_queue.pop(0)
                     st.session_state.show_back = False
