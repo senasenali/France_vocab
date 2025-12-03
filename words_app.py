@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from gtts import gTTS
 from deep_translator import GoogleTranslator
-from github import Github, Auth # 新增库
+from github import Github, Auth
 
 # ==========================================
 # 1. 页面配置
@@ -22,12 +22,13 @@ st.set_page_config(
 )
 
 # ==========================================
-# 2. 🎨 UI/UX 设计
+# 2. 🎨 UI/UX 设计 (Ratatouille & Ernest Style)
 # ==========================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Patrick+Hand&display=swap');
 
+    /* 全局背景 */
     .stApp {
         background-color: #F9F7F1; 
         background-image: radial-gradient(#F9F7F1 20%, #EFEBE0 100%);
@@ -43,8 +44,67 @@ st.markdown("""
         color: #3E2723 !important;
     }
 
-    /* 输入框样式 */
+    /* ============================================================
+       🛑 1. 按钮去红大作战 (Button Color Fix)
+       ============================================================ */
+    
+    /* A. 表单提交按钮 (Ajouter) - 强制覆盖红色 */
+    div[data-testid="stFormSubmitButton"] > button {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important; /* 铜色边框 */
+        color: #C65D3B !important;            /* 铜色文字 */
+        border-radius: 30px !important;
+        font-family: 'Playfair Display', serif !important;
+        padding: 8px 30px !important;
+        transition: 0.3s !important;
+    }
+    
+    /* 悬停状态 */
+    div[data-testid="stFormSubmitButton"] > button:hover {
+        background-color: #F2EFE9 !important; /* 浅米色背景 */
+        color: #C65D3B !important;
+        border-color: #C65D3B !important;
+        box-shadow: 0 4px 12px rgba(198, 93, 59, 0.2) !important;
+    }
+
+    /* 点击/聚焦状态 (防止变红) */
+    div[data-testid="stFormSubmitButton"] > button:active,
+    div[data-testid="stFormSubmitButton"] > button:focus {
+        background-color: transparent !important;
+        border-color: #C65D3B !important;
+        color: #C65D3B !important;
+        box-shadow: none !important;
+    }
+
+    /* B. 侧边栏下载/同步按钮 */
+    [data-testid="stSidebar"] button {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important;
+        color: #C65D3B !important;
+        border-radius: 30px !important;
+        font-family: 'Playfair Display', serif !important;
+    }
+    [data-testid="stSidebar"] button:hover {
+        background-color: #E0D6CC !important;
+    }
+
+    /* C. 通用 Primary 按钮 (Review 页面) */
+    button[kind="primary"] {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important;
+        color: #C65D3B !important;
+        box-shadow: none !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #F2EFE9 !important;
+        color: #C65D3B !important;
+    }
+
+    /* ============================================================
+       🛑 2. 输入框修复
+       ============================================================ */
     div[data-testid="stTextInput"] label { display: none; }
+
     div[data-baseweb="input"] {
         background-color: #FFFEFA !important; 
         border: 2px solid #E0D6CC !important; 
@@ -52,12 +112,15 @@ st.markdown("""
         box-shadow: 0 4px 10px rgba(93, 64, 55, 0.05) !important; 
         padding: 8px 15px !important;
     }
+
     div[data-baseweb="input"]:focus-within {
         border-color: #C65D3B !important; 
         background-color: #FFFEFA !important; 
         box-shadow: 0 0 0 3px rgba(198, 93, 59, 0.15) !important; 
     }
+
     div[data-baseweb="base-input"] { background-color: transparent !important; }
+    
     input[type="text"] {
         background-color: transparent !important;
         color: #5D4037 !important;
@@ -67,32 +130,9 @@ st.markdown("""
         caret-color: #C65D3B !important;
     }
 
-    /* 按钮去红 & 样式 */
-    button[kind="primary"] {
-        background-color: transparent !important;
-        border: 2px solid #C65D3B !important;
-        color: #C65D3B !important;
-        border-radius: 30px !important;
-        transition: 0.3s !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #F2EFE9 !important;
-        box-shadow: 0 4px 12px rgba(198, 93, 59, 0.2) !important;
-    }
-    
-    div.stButton > button {
-        border-radius: 30px !important;
-        border: 2px solid #D7CCC8 !important;
-        color: #5D4037 !important;
-        background-color: transparent !important;
-    }
-    div.stButton > button:hover {
-        border-color: #C65D3B !important;
-        color: #C65D3B !important;
-        background-color: #F2EFE9 !important;
-    }
-
-    /* 卡片布局 */
+    /* ============================================================
+       📋 3. 卡片与布局
+       ============================================================ */
     .menu-card {
         background-color: #FFFEFA;
         padding: 40px 30px;
@@ -104,17 +144,27 @@ st.markdown("""
         text-align: center;
         position: relative;
     }
+
     .menu-divider { border-top: 3px double #C65D3B; width: 80px; margin: 25px auto; opacity: 0.6; }
+    
     .french-word { font-family: 'Playfair Display', serif; font-size: 64px; font-weight: 600; color: #C65D3B; margin-bottom: 5px; letter-spacing: 1px; line-height: 1.1; }
     .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; }
     .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 32px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 12px; background-color: #F9F7F1; }
 
     /* 音频按钮 */
     div.row-widget.stButton > button {
-        font-size: 16px !important;
-        padding: 5px 20px !important;
+        border-radius: 20px !important;
         border: 1px solid #E0D6CC !important;
+        background-color: #FFFEFA !important;
         color: #8D6E63 !important;
+        font-family: 'Patrick Hand', cursive !important;
+        font-size: 18px !important;
+        padding: 5px 20px !important;
+    }
+    div.row-widget.stButton > button:hover {
+        border-color: #C65D3B !important;
+        color: #C65D3B !important;
+        background-color: #FFF !important;
     }
 
 </style>
@@ -207,26 +257,16 @@ def update_word_progress(word_row, quality):
 def sync_to_github():
     """将当前的 session_state 数据写入 GitHub 仓库"""
     try:
-        # 1. 获取 Secrets
         github_token = st.secrets["github"]["token"]
         repo_name = st.secrets["github"]["repo_name"]
-        
-        # 2. 连接 GitHub
         g = Github(auth=Auth.Token(github_token))
         repo = g.get_repo(repo_name)
-        
-        # 3. 获取文件 (vocab.csv)
         contents = repo.get_contents("vocab.csv")
-        
-        # 4. 准备新数据
         csv_content = st.session_state.df_all.to_csv(index=False, encoding='utf-8')
-        
-        # 5. 更新文件
         repo.update_file(contents.path, "Update vocab via App", csv_content, contents.sha)
-        
-        return True, "同步成功！(Synced)"
+        return True, "Synced!"
     except Exception as e:
-        return False, f"同步失败: {e}"
+        return False, f"Error: {e}"
 
 REQUIRED_COLS = ['word', 'meaning', 'gender', 'example'] 
 SRS_COLS = ['last_review', 'next_review', 'interval']
@@ -262,14 +302,13 @@ with st.sidebar:
     # ☁️ 云端同步按钮
     if "github" in st.secrets:
         if st.button("☁️ Sync to Cloud", type="primary", use_container_width=True):
-            with st.spinner("Uploading to GitHub..."):
+            with st.spinner("Syncing..."):
                 success, msg = sync_to_github()
                 if success:
                     st.toast(msg, icon="✅")
                 else:
                     st.error(msg)
     else:
-        st.warning("请配置 Secrets 以启用云同步")
         # 备用下载按钮
         csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
         st.download_button(
@@ -340,8 +379,7 @@ if app_mode == "🔍 Dictionnaire":
                     
                     if st.form_submit_button("🍽️ Ajouter", type="primary"):
                         
-                        # === 自动加冠词逻辑 (Auto Le/La) ===
-                        # 检查是否是名词 (m./f.) 且不以冠词开头
+                        # 自动加冠词
                         check_word = final_word.lower().strip()
                         has_article = check_word.startswith(("le ", "la ", "l'", "un ", "une "))
                         
@@ -350,7 +388,6 @@ if app_mode == "🔍 Dictionnaire":
                                 final_word = "le " + final_word
                             elif "f." in final_gender or "fem" in final_gender:
                                 final_word = "la " + final_word
-                        # ===================================
 
                         new_row = {
                             'word': final_word,
@@ -365,8 +402,7 @@ if app_mode == "🔍 Dictionnaire":
                         st.balloons()
                         st.toast(f"Bon appétit! {final_word} added.", icon="🍷")
                         
-                        # 自动同步一次 (可选，防止忘记点保存)
-                        # if "github" in st.secrets: sync_to_github() 
+                        if "github" in st.secrets: sync_to_github() 
                         
                         st.cache_data.clear()
             else:
