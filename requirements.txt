@@ -4,3 +4,4 @@ gTTS
 requests
 beautifulsoup4
 deep-translator
+PyGithub
