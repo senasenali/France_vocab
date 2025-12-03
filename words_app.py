@@ -44,7 +44,63 @@ st.markdown("""
     }
 
     /* ============================================================
-       🛑 1. 输入框终极修复
+       🛑 1. 按钮去红大作战 (Button Color Fix)
+       ============================================================ */
+    
+    /* A. 侧边栏下载按钮 (.stDownloadButton) */
+    [data-testid="stSidebar"] .stDownloadButton button {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important; /* 铜色边框 */
+        color: #C65D3B !important;            /* 铜色文字 */
+        border-radius: 30px !important;
+        font-family: 'Playfair Display', serif !important;
+        transition: 0.3s !important;
+    }
+    [data-testid="stSidebar"] .stDownloadButton button:hover {
+        background-color: #E0D6CC !important; /* 悬停时变深一点的米色 */
+        border-color: #8D6E63 !important;
+        color: #5D4037 !important;
+    }
+
+    /* B. 表单提交按钮 (Ajouter) */
+    .stFormSubmitButton button {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important;
+        color: #C65D3B !important;
+        border-radius: 30px !important;
+        font-family: 'Playfair Display', serif !important;
+        padding: 8px 30px !important;
+    }
+    .stFormSubmitButton button:hover {
+        background-color: #F2EFE9 !important; /* 悬停变浅米色 */
+        box-shadow: 0 4px 12px rgba(198, 93, 59, 0.2) !important;
+    }
+
+    /* C. 通用 Primary 按钮 (涵盖 Review 页面的 Délicieux) */
+    button[kind="primary"] {
+        background-color: transparent !important;
+        border: 2px solid #C65D3B !important;
+        color: #C65D3B !important;
+        box-shadow: none !important;
+    }
+    button[kind="primary"]:hover {
+        background-color: #F2EFE9 !important;
+        color: #C65D3B !important;
+    }
+
+    /* D. 普通次级按钮 (Review 页面的 Trop Salé) */
+    button[kind="secondary"] {
+        background-color: transparent !important;
+        border: 2px solid #D7CCC8 !important;
+        color: #5D4037 !important;
+    }
+    button[kind="secondary"]:hover {
+        background-color: #F2EFE9 !important;
+        border-color: #8D6E63 !important;
+    }
+
+    /* ============================================================
+       🛑 2. 输入框修复
        ============================================================ */
     div[data-testid="stTextInput"] label { display: none; }
 
@@ -74,12 +130,12 @@ st.markdown("""
     }
 
     /* ============================================================
-       📋 2. 卡片容器 (恢复为统一的单张卡片)
+       📋 3. 卡片与布局
        ============================================================ */
     .menu-card {
         background-color: #FFFEFA;
         padding: 40px 30px;
-        margin-top: 20px; /* 与上面的音频按钮拉开距离 */
+        margin-top: 20px;
         margin-bottom: 30px;
         border-radius: 12px;
         border: 1px solid #E0D6CC; 
@@ -94,51 +150,20 @@ st.markdown("""
     .word-meta { font-family: 'Patrick Hand', cursive; font-size: 24px; color: #78909C; font-style: italic; }
     .word-meaning { font-family: 'Patrick Hand', cursive; font-size: 32px; color: #5D4037; display: inline-block; padding: 10px 25px; border-radius: 12px; background-color: #F9F7F1; }
 
-    /* ============================================================
-       🔘 3. 按钮样式重构 (去中文、去红底)
-       ============================================================ */
-    
-    /* 所有按钮的基础样式 */
-    div.stButton > button {
-        border-radius: 30px !important;
-        font-family: 'Playfair Display', serif !important;
-        font-size: 18px !important;
-        border: 2px solid #D7CCC8 !important; /* 默认浅褐色边框 */
-        background-color: transparent !important; /* 默认透明底 */
-        color: #5D4037 !important;
-        padding: 8px 25px !important;
-        transition: 0.3s all ease !important;
-    }
-
-    /* 悬停效果：变成浅米色，不要变红 */
-    div.stButton > button:hover {
-        border-color: #C65D3B !important;
-        color: #C65D3B !important;
-        background-color: #F2EFE9 !important; /* 极浅的米色 */
-        box-shadow: 0 4px 10px rgba(93, 64, 55, 0.1) !important;
-        transform: translateY(-2px);
-    }
-
-    /* 主按钮 (Primary) - 也就是原本那个红底的按钮 */
-    /* 现在改成铜色边框 + 透明底 */
-    div.stButton > button[kind="primary"] {
-        border-color: #C65D3B !important;
-        color: #C65D3B !important;
-        background-color: transparent !important;
-    }
-
-    /* 主按钮悬停 */
-    div.stButton > button[kind="primary"]:hover {
-        background-color: #F2EFE9 !important;
-        box-shadow: 0 4px 12px rgba(198, 93, 59, 0.2) !important;
-    }
-
-    /* 音频按钮特殊处理：小一点，圆一点 */
-    .audio-btn-container button {
-        font-size: 16px !important;
-        padding: 5px 20px !important;
+    /* 音频按钮 */
+    div.row-widget.stButton > button {
+        border-radius: 20px !important;
         border: 1px solid #E0D6CC !important;
+        background-color: #FFFEFA !important;
         color: #8D6E63 !important;
+        font-family: 'Patrick Hand', cursive !important;
+        font-size: 18px !important;
+        padding: 5px 20px !important;
+    }
+    div.row-widget.stButton > button:hover {
+        border-color: #C65D3B !important;
+        color: #C65D3B !important;
+        background-color: #FFF !important;
     }
 
 </style>
@@ -273,13 +298,11 @@ if app_mode == "🔍 Dictionnaire":
     
     st.markdown("<h1 style='text-align:center;'>Le Dictionnaire</h1>", unsafe_allow_html=True)
     
-    # 搜索框 (无提示语)
     search_query = st.text_input("", placeholder="", label_visibility="collapsed").strip()
     
     auto_cn, auto_pos = "", ""
 
     if search_query:
-        # 自动播放一次
         play_audio_hidden(search_query)
 
         match = df[df['word'].str.lower() == search_query.lower()]
@@ -300,15 +323,12 @@ if app_mode == "🔍 Dictionnaire":
             is_new = True
 
         if display_meaning:
-            # === 中间：音频按钮 (位于搜索框和卡片之间) ===
-            st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True) # 留点空隙
+            st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
-                # 纯英文按钮
                 if st.button("🔊 Pronunciation", key="dict_audio", use_container_width=True):
-                    pass # 刷新重听
+                    pass 
 
-            # === 下方：完整的卡片 ===
             st.markdown(f"""
             <div class="menu-card">
                 <div class="french-word">{display_word}</div>
@@ -329,7 +349,6 @@ if app_mode == "🔍 Dictionnaire":
                     
                     final_word = search_query 
                     
-                    # 纯英文按钮，透明底
                     if st.form_submit_button("🍽️ Ajouter", type="primary"):
                         new_row = {
                             'word': final_word,
@@ -392,14 +411,12 @@ elif app_mode == "📖 Review":
         
         play_audio_hidden(current_word_data['word'])
 
-        # === 中间：音频按钮 ===
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             if st.button("🔊 Pronunciation", key="review_audio", use_container_width=True):
                 pass
 
         if not st.session_state.show_back:
-            # 正面卡片
             st.markdown(f"""
             <div class="menu-card">
                 <div style="color:#BCAAA4; font-family:'Patrick Hand'; margin-bottom:10px;">Plat du Jour</div>
@@ -412,7 +429,6 @@ elif app_mode == "📖 Review":
                 st.session_state.show_back = True
                 st.rerun()
         else:
-            # 背面卡片 (统一的单卡片)
             st.markdown(f"""
             <div class="menu-card">
                 <div class="french-word">{current_word_data['word']}</div>
@@ -422,7 +438,6 @@ elif app_mode == "📖 Review":
             </div>
             """, unsafe_allow_html=True)
             
-            # 按钮区 (纯英文 + 透明底)
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("🍷 Délicieux", use_container_width=True, type="primary"):
