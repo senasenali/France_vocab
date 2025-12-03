@@ -45,29 +45,25 @@ st.markdown("""
     }
 
     /* ============================================================
-       🛑 1. 按钮去红大作战 (Button Color Fix)
+       🛑 1. 按钮去红大作战
        ============================================================ */
-    
-    /* A. 表单提交按钮 (Ajouter) - 强制覆盖红色 */
     div[data-testid="stFormSubmitButton"] > button {
         background-color: transparent !important;
-        border: 2px solid #C65D3B !important; /* 铜色边框 */
-        color: #C65D3B !important;            /* 铜色文字 */
+        border: 2px solid #C65D3B !important; 
+        color: #C65D3B !important;            
         border-radius: 30px !important;
         font-family: 'Playfair Display', serif !important;
         padding: 8px 30px !important;
         transition: 0.3s !important;
     }
     
-    /* 悬停状态 */
     div[data-testid="stFormSubmitButton"] > button:hover {
-        background-color: #F2EFE9 !important; /* 浅米色背景 */
+        background-color: #F2EFE9 !important; 
         color: #C65D3B !important;
         border-color: #C65D3B !important;
         box-shadow: 0 4px 12px rgba(198, 93, 59, 0.2) !important;
     }
 
-    /* 点击/聚焦状态 (防止变红) */
     div[data-testid="stFormSubmitButton"] > button:active,
     div[data-testid="stFormSubmitButton"] > button:focus {
         background-color: transparent !important;
@@ -76,7 +72,6 @@ st.markdown("""
         box-shadow: none !important;
     }
 
-    /* B. 侧边栏下载/同步按钮 */
     [data-testid="stSidebar"] button {
         background-color: transparent !important;
         border: 2px solid #C65D3B !important;
@@ -88,7 +83,6 @@ st.markdown("""
         background-color: #E0D6CC !important;
     }
 
-    /* C. 通用 Primary 按钮 (Review 页面) */
     button[kind="primary"] {
         background-color: transparent !important;
         border: 2px solid #C65D3B !important;
@@ -165,6 +159,15 @@ st.markdown("""
         border-color: #C65D3B !important;
         color: #C65D3B !important;
         background-color: #FFF !important;
+    }
+
+    /* 进度计数器文字 */
+    .progress-text {
+        text-align: center;
+        font-family: 'Patrick Hand', cursive;
+        color: #C65D3B;
+        font-size: 20px;
+        margin-bottom: 5px;
     }
 
 </style>
@@ -448,8 +451,11 @@ elif app_mode == "📖 Review":
             st.rerun()
             
         current_word_data = st.session_state.df_all.loc[cur_idx]
-        progress = 1.0 - (len(st.session_state.study_queue) / 50.0)
-        st.progress(max(0.0, min(1.0, progress)))
+        
+        # 🔢 进度计数器 (替代原来的灰色进度条)
+        queue_len = len(st.session_state.study_queue)
+        total_len = 50 # 假设每天背50个，这里可以优化为实际总数
+        st.markdown(f"<div class='progress-text'>Part {50 - queue_len + 1} / 50</div>", unsafe_allow_html=True)
         
         play_audio_hidden(current_word_data['word'])
 
