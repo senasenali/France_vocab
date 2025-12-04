@@ -6,7 +6,7 @@ import random
 import io
 import base64
 import requests
-import time  # <--- 新增：用于生成唯一时间戳，强制刷新音频
+import time
 from bs4 import BeautifulSoup
 from gtts import gTTS
 from deep_translator import GoogleTranslator
@@ -178,7 +178,6 @@ st.markdown("""
 # 3. 核心功能函数
 # ==========================================
 
-# 🌟 修改点：音频播放函数增加时间戳，强制刷新
 def play_audio_hidden(text, lang='fr'):
     if not text: return
     try:
@@ -187,15 +186,13 @@ def play_audio_hidden(text, lang='fr'):
         tts.write_to_fp(fp)
         b64 = base64.b64encode(fp.getvalue()).decode()
         
-        # 生成一个当前时间的微秒数，确保每次生成的HTML字符串都不一样
-        # 这样 Streamlit 就会被迫重新渲染这个 HTML 块，从而触发 autoplay
+        # 使用时间戳作为唯一ID，强迫浏览器重新加载
         timestamp = int(time.time() * 1000000)
         
         md = f"""
             <audio autoplay style="display:none;" id="audio_{timestamp}">
             <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
             </audio>
-            <!-- 这是一个看不见的 div，用来欺骗 Streamlit 认为内容更新了 -->
             <div style="display:none;">{timestamp}</div>
             """
         st.markdown(md, unsafe_allow_html=True)
@@ -321,7 +318,6 @@ with st.sidebar:
                 else:
                     st.error(msg)
     else:
-        # 备用下载按钮
         csv_buffer = st.session_state.df_all.to_csv(index=False, encoding='utf-8').encode('utf-8')
         st.download_button(
             label="📥 Download CSV",
@@ -343,7 +339,14 @@ if app_mode == "🔍 Dictionnaire":
     auto_cn, auto_pos = "", ""
 
     if search_query:
-        play_audio_hidden(search_query)
+        # === 逻辑：只有当输入改变时，才自动播放 ===
+        # 使用 Session State 记录上一次播放的词
+        if 'last_dict_play' not in st.session_state:
+            st.session_state.last_dict_play = ""
+            
+        if st.session_state.last_dict_play != search_query:
+            play_audio_hidden(search_query)
+            st.session_state.last_dict_play = search_query
 
         match = df[df['word'].str.lower() == search_query.lower()]
         
@@ -366,8 +369,9 @@ if app_mode == "🔍 Dictionnaire":
             st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
+                # 🌟 修改点：点击按钮时，强制调用 play_audio_hidden
                 if st.button("🔊 Pronunciation", key="dict_audio", use_container_width=True):
-                    pass 
+                    play_audio_hidden(search_query)
 
             st.markdown(f"""
             <div class="menu-card">
@@ -390,11 +394,8 @@ if app_mode == "🔍 Dictionnaire":
                     final_word = search_query 
                     
                     if st.form_submit_button("🍽️ Ajouter", type="primary"):
-                        
-                        # 自动加冠词
                         check_word = final_word.lower().strip()
                         has_article = check_word.startswith(("le ", "la ", "l'", "un ", "une "))
-                        
                         if not has_article:
                             if "m." in final_gender or "masc" in final_gender:
                                 final_word = "le " + final_word
@@ -413,16 +414,12 @@ if app_mode == "🔍 Dictionnaire":
                         st.session_state.df_all = pd.concat([st.session_state.df_all, pd.DataFrame([new_row])], ignore_index=True)
                         st.balloons()
                         st.toast(f"Bon appétit! {final_word} added.", icon="🍷")
-                        
                         if "github" in st.secrets: sync_to_github() 
-                        
                         st.cache_data.clear()
             else:
                 st.success("✅ Already in menu!")
-
         else:
              st.error("Not found / Pas trouvé")
-    
     else:
         st.markdown("<br><br><p style='text-align:center; color:#BCAAA4; font-family:Patrick Hand;'>Bon appétit !</p>", unsafe_allow_html=True)
 
@@ -460,19 +457,26 @@ elif app_mode == "📖 Review":
             st.rerun()
             
         current_word_data = st.session_state.df_all.loc[cur_idx]
+        current_word_text = current_word_data['word']
         
-        # 🔢 进度计数器
+        # 🔢 进度
         queue_len = len(st.session_state.study_queue)
-        total_len = 50 
         st.markdown(f"<div class='progress-text'>Part {50 - queue_len + 1} / 50</div>", unsafe_allow_html=True)
         
-        # 自动播放
-        play_audio_hidden(current_word_data['word'])
+        # === 逻辑：自动播放只在“换词”时触发 ===
+        if 'last_review_word' not in st.session_state:
+            st.session_state.last_review_word = ""
+            
+        # 如果当前词和上一次记录的词不一样，说明换词了 -> 自动播放
+        if st.session_state.last_review_word != current_word_text:
+            play_audio_hidden(current_word_text)
+            st.session_state.last_review_word = current_word_text
 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
+            # 🌟 修改点：点击按钮时，强制调用播放
             if st.button("🔊 Pronunciation", key="review_audio", use_container_width=True):
-                pass
+                play_audio_hidden(current_word_text)
 
         if not st.session_state.show_back:
             st.markdown(f"""
