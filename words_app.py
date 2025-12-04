@@ -6,6 +6,7 @@ import random
 import io
 import base64
 import requests
+import time  # <--- 新增：用于生成唯一时间戳，强制刷新音频
 from bs4 import BeautifulSoup
 from gtts import gTTS
 from deep_translator import GoogleTranslator
@@ -177,6 +178,7 @@ st.markdown("""
 # 3. 核心功能函数
 # ==========================================
 
+# 🌟 修改点：音频播放函数增加时间戳，强制刷新
 def play_audio_hidden(text, lang='fr'):
     if not text: return
     try:
@@ -184,10 +186,17 @@ def play_audio_hidden(text, lang='fr'):
         fp = io.BytesIO()
         tts.write_to_fp(fp)
         b64 = base64.b64encode(fp.getvalue()).decode()
+        
+        # 生成一个当前时间的微秒数，确保每次生成的HTML字符串都不一样
+        # 这样 Streamlit 就会被迫重新渲染这个 HTML 块，从而触发 autoplay
+        timestamp = int(time.time() * 1000000)
+        
         md = f"""
-            <audio autoplay style="display:none;">
+            <audio autoplay style="display:none;" id="audio_{timestamp}">
             <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
             </audio>
+            <!-- 这是一个看不见的 div，用来欺骗 Streamlit 认为内容更新了 -->
+            <div style="display:none;">{timestamp}</div>
             """
         st.markdown(md, unsafe_allow_html=True)
     except Exception:
@@ -452,11 +461,12 @@ elif app_mode == "📖 Review":
             
         current_word_data = st.session_state.df_all.loc[cur_idx]
         
-        # 🔢 进度计数器 (替代原来的灰色进度条)
+        # 🔢 进度计数器
         queue_len = len(st.session_state.study_queue)
-        total_len = 50 # 假设每天背50个，这里可以优化为实际总数
+        total_len = 50 
         st.markdown(f"<div class='progress-text'>Part {50 - queue_len + 1} / 50</div>", unsafe_allow_html=True)
         
+        # 自动播放
         play_audio_hidden(current_word_data['word'])
 
         col1, col2, col3 = st.columns([1, 1, 1])
